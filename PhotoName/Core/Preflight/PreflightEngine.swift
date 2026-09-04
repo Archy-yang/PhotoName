@@ -12,6 +12,8 @@ enum PreflightIssueKind: Equatable, Sendable {
     case folderNotWritable
     /// 资产缺少拍摄时间（EXIF）
     case missingCaptureTime
+    /// 拍摄时间来自文件日期 fallback（非 EXIF），可能不准确（PRD F-05 要求显式展示）
+    case fallbackCaptureTime
     /// RAW/JPEG 资产缺少 XMP sidecar
     case missingSidecar
 }
@@ -22,7 +24,7 @@ extension PreflightIssueKind {
         switch self {
         case .destinationExists, .duplicateDestination, .invalidTargetName, .folderNotWritable:
             return true
-        case .missingCaptureTime, .missingSidecar:
+        case .missingCaptureTime, .fallbackCaptureTime, .missingSidecar:
             return false
         }
     }
@@ -102,7 +104,26 @@ struct PreflightEngine: Sendable {
             ))
         }
 
-        // 5. 缺拍摄时间（警告）
+        // 5a. 拍摄时间用了文件日期 fallback（PRD F-05：必须显式展示）
+        let withFallbackTime = assets.filter {
+            let source = metadata[$0.id]?.captureTimeSource
+            return metadata[$0.id]?.captureTime != nil && source != .exif
+        }
+        if !withFallbackTime.isEmpty {
+            let sources = Dictionary(grouping: withFallbackTime) {
+                metadata[$0.id]?.captureTimeSource ?? .unavailable
+            }
+            let description = sources
+                .sorted { $0.key.rawValue < $1.key.rawValue }
+                .map { "\($0.value.count) 个（\($0.key.displayName)）" }
+                .joined(separator: "、")
+            issues.append(PreflightIssue(
+                kind: .fallbackCaptureTime,
+                message: "\(withFallbackTime.count) 个资产的拍摄时间来自文件日期而非 EXIF：\(description)，可能不准确"
+            ))
+        }
+
+        // 5b. 完全缺拍摄时间（警告）
         let withoutTime = assets.filter { metadata[$0.id]?.captureTime == nil }
         if !withoutTime.isEmpty {
             issues.append(PreflightIssue(

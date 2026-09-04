@@ -87,6 +87,35 @@ final class PreflightEngineTests: XCTestCase {
         XCTAssertTrue(report.canExecute, "警告不应阻塞执行")
     }
 
+    /// PRD F-05：用了文件日期 fallback 必须显式警示
+    func test_fallbackCaptureTime_isWarning_withSourceLabel() {
+        let asset = PhotoAsset(resources: [PhotoResource(url: workDir.appending(path: "a.ARW"), kind: .raw)])
+        let report = engine.run(
+            plan: RenamePlan(operations: [operation("a.ARW", "0001.ARW")]),
+            assets: [asset],
+            metadata: [asset.id: PhotoMetadata(captureTime: Date(), captureTimeSource: .fileCreationDate)],
+            destinationDirectory: workDir
+        )
+
+        let fallbackWarnings = report.warnings.filter { $0.kind == .fallbackCaptureTime }
+        XCTAssertEqual(fallbackWarnings.count, 1)
+        XCTAssertTrue(fallbackWarnings[0].message.contains("文件创建日期"), "警告应标明具体 fallback 来源")
+        XCTAssertTrue(report.canExecute)
+    }
+
+    func test_exifCaptureTime_producesNoFallbackWarning() {
+        let asset = PhotoAsset(resources: [PhotoResource(url: workDir.appending(path: "a.ARW"), kind: .raw)])
+        let report = engine.run(
+            plan: RenamePlan(operations: []),
+            assets: [asset],
+            metadata: [asset.id: PhotoMetadata(captureTime: Date(), captureTimeSource: .exif)],
+            destinationDirectory: workDir
+        )
+
+        XCTAssertFalse(report.warnings.contains { $0.kind == .fallbackCaptureTime })
+        XCTAssertFalse(report.warnings.contains { $0.kind == .missingCaptureTime })
+    }
+
     func test_rawOrJpegWithoutXMP_isWarning() {
         let withXMP = PhotoAsset(resources: [
             PhotoResource(url: workDir.appending(path: "a.ARW"), kind: .raw),

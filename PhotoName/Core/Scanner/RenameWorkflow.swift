@@ -5,6 +5,7 @@ import Foundation
 struct RenameWorkflow: Sendable {
     private let scanner = PhotoScanner()
     private let metadataReader = MetadataReader()
+    private let timeResolver = CaptureTimeResolver()
     private let grouper = AssetGrouper()
     private let planner = RenamePlanner()
 
@@ -42,12 +43,20 @@ struct RenameWorkflow: Sendable {
         )
     }
 
-    /// 批量读取资产元数据（每组取第一个资源），供 Preflight 与 Planner 共用
+    /// 批量读取资产元数据（每组取第一个资源），供 Preflight 与 Planner 共用。
+    /// 拍摄时间按 PRD F-05 回退链解析（EXIF → Media Creation → File Creation → File Modification），
+    /// 来源记录在 captureTimeSource，供 Preflight 显式警示。
     func readMetadata(for assets: [PhotoAsset]) -> [UUID: PhotoMetadata] {
         var metadata: [UUID: PhotoMetadata] = [:]
         for asset in assets {
             guard let first = asset.resources.first else { continue }
-            metadata[asset.id] = try? metadataReader.readMetadata(at: first.url)
+            var meta = (try? metadataReader.readMetadata(at: first.url)) ?? PhotoMetadata()
+            if meta.captureTimeSource != .exif {
+                let resolved = timeResolver.resolve(url: first.url, exifTime: meta.captureTime)
+                meta.captureTime = resolved.date
+                meta.captureTimeSource = resolved.source
+            }
+            metadata[asset.id] = meta
         }
         return metadata
     }

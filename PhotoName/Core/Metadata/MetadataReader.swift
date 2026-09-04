@@ -25,9 +25,12 @@ struct MetadataReader: Sendable {
         let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any]
         let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
 
+        let exifCaptureTime = (exif?[kCGImagePropertyExifDateTimeOriginal] as? String)
+            .flatMap(Self.exifFormatter.date(from:))
+
         return PhotoMetadata(
-            captureTime: (exif?[kCGImagePropertyExifDateTimeOriginal] as? String)
-                .flatMap(Self.exifFormatter.date(from:)),
+            captureTime: exifCaptureTime,
+            captureTimeSource: exifCaptureTime == nil ? nil : .exif,
             cameraMake: tiff?[kCGImagePropertyTIFFMake] as? String,
             cameraModel: tiff?[kCGImagePropertyTIFFModel] as? String,
             lensModel: exif?[kCGImagePropertyExifLensModel] as? String

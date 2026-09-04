@@ -70,16 +70,20 @@ final class RenameWorkflowTests: XCTestCase {
         XCTAssertTrue(plan.operations.isEmpty)
     }
 
-    func test_makePlan_noEXIFTime_throwsMissingCaptureTime() throws {
+    /// F-05 fallback 链：无 EXIF 时间的文件改用文件日期，不再抛错
+    func test_makePlan_noEXIFTime_usesFallbackFileDate() throws {
         try copyFixture("noexif_sample", as: "DSC_0002.JPG")
-        XCTAssertThrowsError(
-            try workflow.makePlan(
-                directory: workDir,
-                template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{index}")
-            )
-        ) { error in
-            XCTAssertEqual(error as? TemplateError, .missingCaptureTime)
-        }
+
+        let plan = try workflow.makePlan(
+            directory: workDir,
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{index}")
+        )
+
+        XCTAssertEqual(plan.operations.count, 1)
+        // 来源必须被标记为非 EXIF（文件创建日期），供预检警示
+        let assets = try workflow.loadAssets(directory: workDir)
+        let metadata = workflow.readMetadata(for: assets)
+        XCTAssertEqual(metadata[assets[0].id]?.captureTimeSource, .fileCreationDate)
     }
 
     func test_loadAssets_returnsGroupedAssets() throws {
