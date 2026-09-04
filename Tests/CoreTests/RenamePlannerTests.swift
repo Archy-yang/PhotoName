@@ -1,0 +1,118 @@
+import XCTest
+@testable import PhotoName
+
+final class RenamePlannerTests: XCTestCase {
+    private let planner = RenamePlanner()
+    private let renderer = TemplateRenderer()
+
+    private var sampleDate: Date {
+        var components = DateComponents()
+        components.year = 2026; components.month = 9; components.day = 2
+        components.hour = 10; components.minute = 31; components.second = 22
+        return Calendar.current.date(from: components)!
+    }
+
+    private func resource(_ name: String) -> PhotoResource {
+        let url = URL(fileURLWithPath: "/shoot/\(name)")
+        return PhotoResource(url: url, kind: ResourceKind(fileExtension: (name as NSString).pathExtension))
+    }
+
+    private func asset(_ names: [String]) -> PhotoAsset {
+        PhotoAsset(resources: names.map(resource))
+    }
+
+    func test_plan_preservesExtensionPerResource() throws {
+        let group = asset(["DSC_0001.ARW", "DSC_0001.JPG", "DSC_0001.XMP"])
+        let plan = try planner.makePlan(
+            assets: [group],
+            metadata: [group.id: PhotoMetadata(captureTime: sampleDate)],
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{index}")
+        )
+
+        XCTAssertEqual(plan.operations.map { $0.newURL.lastPathComponent }, [
+            "20260902_0001.ARW", "20260902_0001.JPG", "20260902_0001.XMP",
+        ])
+        XCTAssertEqual(plan.operations.map { $0.originalURL.lastPathComponent }, [
+            "DSC_0001.ARW", "DSC_0001.JPG", "DSC_0001.XMP",
+        ])
+    }
+
+    func test_plan_indexIncrementsPerAsset_notPerResource() throws {
+        let first = asset(["DSC_0001.ARW", "DSC_0001.JPG"])
+        let second = asset(["DSC_0002.ARW"])
+        let plan = try planner.makePlan(
+            assets: [first, second],
+            metadata: [first.id: PhotoMetadata(captureTime: sampleDate), second.id: PhotoMetadata(captureTime: sampleDate)],
+            template: RenameTemplate(pattern: "{index}")
+        )
+
+        let newNames = plan.operations.map { $0.newURL.lastPathComponent }
+        XCTAssertEqual(newNames, ["0001.ARW", "0001.JPG", "0002.ARW"])
+    }
+
+    func test_plan_usesMetadataPerAsset() throws {
+        let sony = asset(["DSC_0001.ARW"])
+        let iphone = asset(["IMG_0002.HEIC"])
+        let plan = try planner.makePlan(
+            assets: [sony, iphone],
+            metadata: [
+                sony.id: PhotoMetadata(captureTime: sampleDate, cameraModel: "ILCE-7RM5"),
+                iphone.id: PhotoMetadata(captureTime: sampleDate, cameraModel: "iPhone 17 Pro"),
+            ],
+            template: RenameTemplate(pattern: "{camera}_{index}")
+        )
+
+        let newNames = plan.operations.map { $0.newURL.lastPathComponent }
+        XCTAssertEqual(newNames, ["ILCE-7RM5_0001.ARW", "iPhone 17 Pro_0002.HEIC"])
+    }
+
+    func test_plan_startingIndexDefaultsToOne_andIsConfigurable() throws {
+        let only = asset(["DSC_0001.ARW"])
+        let plan = try planner.makePlan(
+            assets: [only],
+            metadata: [only.id: PhotoMetadata()],
+            template: RenameTemplate(pattern: "{index}"),
+            startingIndex: 100
+        )
+
+        XCTAssertEqual(plan.operations.first?.newURL.lastPathComponent, "0100.ARW")
+    }
+
+    func test_plan_originalVariable_usesStemOfFirstResource() throws {
+        let group = asset(["DSC_0001.ARW", "DSC_0001.JPG"])
+        let plan = try planner.makePlan(
+            assets: [group],
+            metadata: [group.id: PhotoMetadata()],
+            template: RenameTemplate(pattern: "kept-{original}")
+        )
+
+        XCTAssertEqual(plan.operations.map { $0.newURL.lastPathComponent }, [
+            "kept-DSC_0001.ARW", "kept-DSC_0001.JPG",
+        ])
+    }
+
+    func test_plan_missingCaptureTime_throws() {
+        let only = asset(["DSC_0001.ARW"])
+        XCTAssertThrowsError(
+            try planner.makePlan(
+                assets: [only],
+                metadata: [only.id: PhotoMetadata()],
+                template: RenameTemplate(pattern: "{YYYY}_{index}")
+            )
+        ) { error in
+            XCTAssertEqual(error as? TemplateError, .missingCaptureTime)
+        }
+    }
+
+    func test_plan_rendererIsConsistentWithPlannerOutput() throws {
+        let group = asset(["DSC_0001.ARW"])
+        let context = TemplateContext(captureTime: sampleDate, originalBaseName: "DSC_0001")
+        let rendered = try renderer.render(RenameTemplate(pattern: "{YYYY}_{index}"), context: context, index: 1)
+        let plan = try planner.makePlan(
+            assets: [group],
+            metadata: [group.id: PhotoMetadata(captureTime: sampleDate)],
+            template: RenameTemplate(pattern: "{YYYY}_{index}")
+        )
+        XCTAssertEqual(plan.operations.first?.newURL.lastPathComponent, "\(rendered).ARW")
+    }
+}

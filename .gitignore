@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# XcodeGen 生成产物（保留 project.pbxproj 以便直接打开；重新 generate 可再生）
+# PhotoName.xcodeproj/
+
+# Swift Package Manager
+.build/
+Packages/
+
+# Test fixtures 生成的临时产物
+test/*.jpg
+test/*.heic

@@ -1,0 +1,87 @@
+name: PhotoName
+options:
+  bundleIdPrefix: com.longint
+  deploymentTarget:
+    macOS: "15.0"
+    iOS: "18.0"
+  xcodeVersion: "26.3"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: true
+    GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  PhotoName_macOS:
+    build:
+      targets:
+        PhotoName_macOS: all
+        PhotoNameTests_macOS: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PhotoNameTests_macOS
+  PhotoName_iOS:
+    build:
+      targets:
+        PhotoName_iOS: all
+        PhotoNameTests_iOS: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PhotoNameTests_iOS
+
+targets:
+  PhotoName:
+    type: application
+    platform: [macOS, iOS]
+    sources:
+      - path: PhotoName
+        excludes: ["**/.gitkeep"]
+      - path: docs
+        type: folder
+        buildPhase: none
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.longint.photoname
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_ENTITLEMENTS: PhotoName/PhotoName.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleDisplayName: PhotoName
+        STOREKIT_CONFIGURATION_FILE_PATH: "$(SRCROOT)/PhotoName/Commerce/StoreKit/PhotoName.storekit"
+    entitlements:
+      path: PhotoName/PhotoName.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+
+  PhotoNameTests_macOS:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: PhotoName_macOS
+    settings:
+      base:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/PhotoName.app/Contents/MacOS/PhotoName"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+  PhotoNameTests_iOS:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: PhotoName_iOS
+    settings:
+      base:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/PhotoName.app/PhotoName"
+        BUNDLE_LOADER: "$(TEST_HOST)"
