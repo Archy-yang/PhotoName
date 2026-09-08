@@ -6,9 +6,10 @@ import Foundation
 struct RenameTransaction: Sendable {
     let journal: RenameJournal
 
-    /// 返回成功的操作数
+    /// 返回成功的操作数。progress(done, total) 逐操作回调（后台线程，UI 侧自行调度）。
+    /// Journal 按 64 条缓冲批量落盘：兼顾大目录性能与崩溃时最多丢失一小段记录（Crash Recovery 在 Phase 5 正式设计）。
     @discardableResult
-    func execute(_ plan: RenamePlan) throws -> Int {
+    func execute(_ plan: RenamePlan, progress: (@Sendable (Int, Int) -> Void)? = nil) throws -> Int {
         // 批内重复目标（例如模板漏了 {index} 导致整批同名）
         let targets = plan.operations.map { $0.newURL.path }
         if Set(targets).count != targets.count {
@@ -21,10 +22,13 @@ struct RenameTransaction: Sendable {
         }
 
         var completed = 0
+        let total = plan.operations.count
         let transactionID = UUID()
+        var journalBuffer: [RenameRecord] = []
+
         for operation in plan.operations {
             try FileManager.default.moveItem(at: operation.originalURL, to: operation.newURL)
-            try journal.append(
+            journalBuffer.append(
                 RenameRecord(
                     assetID: operation.assetID,
                     transactionID: transactionID,
@@ -33,7 +37,15 @@ struct RenameTransaction: Sendable {
                 )
             )
             completed += 1
+            if journalBuffer.count >= Self.journalFlushSize {
+                try journal.append(contentsOf: journalBuffer)
+                journalBuffer.removeAll(keepingCapacity: true)
+            }
+            progress?(completed, total)
         }
+        try journal.append(contentsOf: journalBuffer)
         return completed
     }
+
+    private static let journalFlushSize = 64
 }

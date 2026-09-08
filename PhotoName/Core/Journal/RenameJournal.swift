@@ -21,6 +21,14 @@ final class RenameJournal: Sendable {
         try write(records)
     }
 
+    /// 批量追加：只读写一次文件（大目录执行的 O(n²) I/O 修复）
+    func append(contentsOf newRecords: [RenameRecord]) throws {
+        guard !newRecords.isEmpty else { return }
+        var records = try allRecords()
+        records.append(contentsOf: newRecords)
+        try write(records)
+    }
+
     /// 弹出最后一条记录（单条 Undo 时调用）。空日志返回 nil。
     func removeLast() throws -> RenameRecord? {
         var records = try allRecords()

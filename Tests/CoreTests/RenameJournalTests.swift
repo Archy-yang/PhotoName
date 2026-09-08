@@ -99,4 +99,23 @@ final class RenameJournalTests: XCTestCase {
         XCTAssertEqual(removed?.map(\.originalPath), ["/a/3"])
         XCTAssertEqual(try journal.allRecords().map(\.originalPath), ["/a/1", "/a/2"])
     }
+
+    /// 批量追加只写一次文件（大目录执行的 O(n²) I/O 修复）
+    func test_appendBatch_writesAllRecordsOnce() throws {
+        let journal = RenameJournal(fileURL: journalFile)
+        let records = (1...500).map {
+            RenameRecord(transactionID: batchID, originalPath: "/a/\($0)", newPath: "/a/x\($0)")
+        }
+
+        try journal.append(contentsOf: records)
+
+        XCTAssertEqual(try journal.allRecords().count, 500)
+        XCTAssertEqual(try journal.allRecords().last?.originalPath, "/a/500")
+    }
+
+    func test_appendBatch_empty_doesNothing() throws {
+        let journal = RenameJournal(fileURL: journalFile)
+        try journal.append(contentsOf: [])
+        XCTAssertTrue(try journal.allRecords().isEmpty)
+    }
 }

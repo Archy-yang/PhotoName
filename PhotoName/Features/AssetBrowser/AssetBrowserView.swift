@@ -7,15 +7,19 @@ struct AssetBrowserView: View {
     @State private var showImporter = false
 
     var body: some View {
-        NavigationSplitView {
-            sourcesSidebar
-                .navigationTitle("PhotoName")
-                .navigationSplitViewColumnWidth(min: 180, ideal: 210)
-        } content: {
-            assetList
-                .navigationSplitViewColumnWidth(min: 280, ideal: 360)
-        } detail: {
-            inspector
+        VStack(spacing: 0) {
+            NavigationSplitView {
+                sourcesSidebar
+                    .navigationTitle("PhotoName")
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 210)
+            } content: {
+                assetList
+                    .navigationSplitViewColumnWidth(min: 280, ideal: 360)
+            } detail: {
+                inspector
+            }
+            // 工作流条放在 VStack 中占独立空间，列表内容不会被遮挡
+            workflowBar
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -26,7 +30,6 @@ struct AssetBrowserView: View {
                 model.pickFolder(at: url)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { workflowBar }
         .onAppear { model.restoreLastFolder() }
     }
 
@@ -89,7 +92,7 @@ struct AssetBrowserView: View {
                             .tag(asset.id)
                             .contextMenu {
                                 Button("撤销此资产的最近变更（整组）") {
-                                    model.undoAsset(asset)
+                                    Task { await model.undoAsset(asset) }
                                 }
                             }
                         }
@@ -197,13 +200,13 @@ struct AssetBrowserView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Button("撤销上一批") { model.undoLastBatch() }
-                    .disabled(!model.canUndo)
-                Button("生成预览") { model.makePreviewPlan() }
-                    .disabled(model.assets.isEmpty || model.templatePattern.isEmpty)
-                Button("执行重命名") { model.executePlan() }
+                Button("撤销上一批") { Task { await model.undoLastBatch() } }
+                    .disabled(!model.canUndo || model.isBusy)
+                Button("生成预览") { Task { await model.makePreviewPlan() } }
+                    .disabled(model.assets.isEmpty || model.templatePattern.isEmpty || model.isBusy)
+                Button("执行重命名") { Task { await model.executePlan() } }
                     .buttonStyle(.borderedProminent)
-                    .disabled(model.plan == nil || model.preflightReport?.canExecute == false)
+                    .disabled(model.plan == nil || model.preflightReport?.canExecute == false || model.isBusy)
             }
         }
         .padding(.horizontal, 14)

@@ -84,6 +84,39 @@ final class RenameTransactionTests: XCTestCase {
         XCTAssertTrue(try journal.allRecords().isEmpty)
     }
 
+    // MARK: - 执行进度
+
+    /// @Sendable 回调的线程安全收集器
+    private final class ProgressCollector: @unchecked Sendable {
+        private let lock = NSLock()
+        private var reports: [(done: Int, total: Int)] = []
+        func append(_ done: Int, _ total: Int) {
+            lock.lock(); reports.append((done, total)); lock.unlock()
+        }
+        var value: [(done: Int, total: Int)] {
+            lock.lock(); defer { lock.unlock() }; return reports
+        }
+    }
+
+    func test_execute_reportsMonotonicProgress() throws {
+        try makeFile("a.ARW")
+        try makeFile("b.ARW")
+        try makeFile("c.ARW")
+        let plan = plan(originalNames: ["a.ARW", "b.ARW", "c.ARW"], newNames: ["x.ARW", "y.ARW", "z.ARW"])
+
+        let collector = ProgressCollector()
+        try transaction.execute(plan) { done, total in
+            collector.append(done, total)
+        }
+
+        let reports = collector.value
+        XCTAssertEqual(reports.last?.total, 3, "总数应为操作数")
+        XCTAssertEqual(reports.last?.done, 3, "最后应报告完成全部")
+        for (prev, next) in zip(reports, reports.dropFirst()) {
+            XCTAssertLessThan(prev.done, next.done, "进度必须单调递增")
+        }
+    }
+
     // MARK: - 撤销联动
 
     func test_execute_thenUndoLast_restoresOneOperation() throws {

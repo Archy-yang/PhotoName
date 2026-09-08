@@ -46,9 +46,14 @@ struct RenameWorkflow: Sendable {
     /// 批量读取资产元数据（每组取第一个资源），供 Preflight 与 Planner 共用。
     /// 拍摄时间按 PRD F-05 回退链解析（EXIF → Media Creation → File Creation → File Modification），
     /// 来源记录在 captureTimeSource，供 Preflight 显式警示。
-    func readMetadata(for assets: [PhotoAsset]) -> [UUID: PhotoMetadata] {
+    /// progress 每 250 个资产回调一次（done, total），供 UI 显示进度。
+    func readMetadata(
+        for assets: [PhotoAsset],
+        progress: (@Sendable (Int, Int) -> Void)? = nil
+    ) -> [UUID: PhotoMetadata] {
         var metadata: [UUID: PhotoMetadata] = [:]
-        for asset in assets {
+        let total = assets.count
+        for (index, asset) in assets.enumerated() {
             guard let first = asset.resources.first else { continue }
             var meta = (try? metadataReader.readMetadata(at: first.url)) ?? PhotoMetadata()
             if meta.captureTimeSource != .exif {
@@ -57,6 +62,9 @@ struct RenameWorkflow: Sendable {
                 meta.captureTimeSource = resolved.source
             }
             metadata[asset.id] = meta
+            if let progress, index % 250 == 0 {
+                progress(index, total)
+            }
         }
         return metadata
     }

@@ -30,7 +30,7 @@ final class PreflightEngineTests: XCTestCase {
 
     func test_destinationExists_isBlocking() throws {
         try makeFile("taken.ARW")
-        let report = engine.run(plan: RenamePlan(operations: [operation("a.ARW", "taken.ARW")]), destinationDirectory: workDir)
+        let report = engine.run(plan: RenamePlan(operations: [operation("a.ARW", "taken.ARW")]))
 
         XCTAssertEqual(report.blockingIssues.count, 1)
         XCTAssertFalse(report.canExecute)
@@ -38,8 +38,7 @@ final class PreflightEngineTests: XCTestCase {
 
     func test_duplicateTargetsInBatch_isBlocking() {
         let report = engine.run(
-            plan: RenamePlan(operations: [operation("a.ARW", "same.ARW"), operation("b.ARW", "same.ARW")]),
-            destinationDirectory: workDir
+            plan: RenamePlan(operations: [operation("a.ARW", "same.ARW"), operation("b.ARW", "same.ARW")])
         )
 
         XCTAssertEqual(report.blockingIssues.count, 1)
@@ -48,8 +47,7 @@ final class PreflightEngineTests: XCTestCase {
 
     func test_illegalTargetName_isBlocking() {
         let report = engine.run(
-            plan: RenamePlan(operations: [operation("a.ARW", "bad/name.ARW")]),
-            destinationDirectory: workDir
+            plan: RenamePlan(operations: [operation("a.ARW", "bad/name.ARW")])
         )
 
         XCTAssertTrue(report.blockingIssues.contains { $0.kind == .invalidTargetName })
@@ -63,10 +61,13 @@ final class PreflightEngineTests: XCTestCase {
             try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: readOnlyDir.path)
         }
 
-        let report = engine.run(
-            plan: RenamePlan(operations: [operation("a.ARW", "x.ARW")]),
-            destinationDirectory: readOnlyDir
+        // 原文件与目标都在只读目录中（重命名不跨目录，目标目录即只读目录）
+        let op = RenameOperation(
+            originalURL: readOnlyDir.appending(path: "a.ARW"),
+            newURL: readOnlyDir.appending(path: "x.ARW")
         )
+
+        let report = engine.run(plan: RenamePlan(operations: [op]))
 
         XCTAssertTrue(report.blockingIssues.contains { $0.kind == .folderNotWritable })
         XCTAssertFalse(report.canExecute)
@@ -80,7 +81,6 @@ final class PreflightEngineTests: XCTestCase {
             plan: RenamePlan(operations: [operation("a.ARW", "0001.ARW")]),
             assets: [asset],
             metadata: [asset.id: PhotoMetadata(captureTime: nil)],
-            destinationDirectory: workDir
         )
 
         XCTAssertTrue(report.warnings.contains { $0.kind == .missingCaptureTime })
@@ -94,7 +94,6 @@ final class PreflightEngineTests: XCTestCase {
             plan: RenamePlan(operations: [operation("a.ARW", "0001.ARW")]),
             assets: [asset],
             metadata: [asset.id: PhotoMetadata(captureTime: Date(), captureTimeSource: .fileCreationDate)],
-            destinationDirectory: workDir
         )
 
         let fallbackWarnings = report.warnings.filter { $0.kind == .fallbackCaptureTime }
@@ -109,7 +108,6 @@ final class PreflightEngineTests: XCTestCase {
             plan: RenamePlan(operations: []),
             assets: [asset],
             metadata: [asset.id: PhotoMetadata(captureTime: Date(), captureTimeSource: .exif)],
-            destinationDirectory: workDir
         )
 
         XCTAssertFalse(report.warnings.contains { $0.kind == .fallbackCaptureTime })
@@ -126,7 +124,6 @@ final class PreflightEngineTests: XCTestCase {
             plan: RenamePlan(operations: []),
             assets: [withXMP, withoutXMP],
             metadata: [:],
-            destinationDirectory: workDir
         )
 
         XCTAssertEqual(report.warnings.filter { $0.kind == .missingSidecar }.count, 1)
@@ -138,11 +135,40 @@ final class PreflightEngineTests: XCTestCase {
     func test_cleanPlan_hasNoIssues_andCanExecute() throws {
         try makeFile("a.ARW")
         let report = engine.run(
-            plan: RenamePlan(operations: [operation("a.ARW", "x.ARW")]),
-            destinationDirectory: workDir
+            plan: RenamePlan(operations: [operation("a.ARW", "x.ARW")])
         )
 
         XCTAssertTrue(report.issues.isEmpty)
         XCTAssertTrue(report.canExecute)
+    }
+
+    /// 回归：子目录中的文件重命名（目标与源同目录）不应被误判为路径逃逸
+    func test_subdirectoryRename_sameParent_notFlagged() throws {
+        let subDir = workDir.appending(path: "DCIM/100SU")
+        try FileManager.default.createDirectory(at: subDir, withIntermediateDirectories: true)
+        try "data".write(to: subDir.appending(path: "a.ARW"), atomically: true, encoding: .utf8)
+        let op = RenameOperation(
+            originalURL: subDir.appending(path: "a.ARW"),
+            newURL: subDir.appending(path: "test_0001.ARW")
+        )
+
+        let report = engine.run(plan: RenamePlan(operations: [op]))
+
+        XCTAssertTrue(report.canExecute, "同目录重命名不应被标记：\(report.issues)")
+    }
+
+    /// 目标跑到另一个目录才是非法（重命名不跨目录）
+    func test_targetInDifferentDirectory_isInvalid() throws {
+        let otherDir = workDir.appending(path: "elsewhere")
+        try FileManager.default.createDirectory(at: otherDir, withIntermediateDirectories: true)
+        try makeFile("a.ARW")
+        let op = RenameOperation(
+            originalURL: workDir.appending(path: "a.ARW"),
+            newURL: otherDir.appending(path: "x.ARW")
+        )
+
+        let report = engine.run(plan: RenamePlan(operations: [op]))
+
+        XCTAssertTrue(report.blockingIssues.contains { $0.kind == .invalidTargetName })
     }
 }

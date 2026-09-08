@@ -11,6 +11,8 @@ final class RenameWorkflowModel {
     private(set) var preflightReport: PreflightReport?
     private(set) var statusText = ""
     private(set) var canUndo = false
+    /// 重 I/O（扫描/读 EXIF/批量改名）进行中，UI 据此禁用操作
+    private(set) var isBusy = false
 
     /// 当前选中的资产（Inspector 展示用）
     var selection: PhotoAsset.ID?
@@ -50,8 +52,7 @@ final class RenameWorkflowModel {
         folderURL = url
         saveBookmark(for: url)
         activateJournal()
-        reloadAssets()
-        statusText = "✅ 已选择：\(url.lastPathComponent)，共 \(assets.count) 个资产"
+        Task { await reloadAssets() }
     }
 
     /// App 启动时用持久化的 bookmark 恢复上次选择的文件夹
@@ -78,31 +79,43 @@ final class RenameWorkflowModel {
         isAccessingScope = true
         folderURL = url
         activateJournal()
-        reloadAssets()
-        statusText = "✅ 已恢复上次文件夹：\(url.lastPathComponent)，共 \(assets.count) 个资产"
+        Task { await reloadAssets() }
     }
 
-    // MARK: - 预览与执行
+    // MARK: - 预览与执行（重 I/O 均在后台线程，UI 保持响应）
 
-    func makePreviewPlan() {
+    func makePreviewPlan() async {
         guard let folderURL else { return }
+        isBusy = true
+        defer { isBusy = false }
         do {
-            let metadata = workflow.readMetadata(for: assets)
+            let currentAssets = assets
+            let pattern = templatePattern
+            let project = projectName.isEmpty ? nil : projectName
+
+            let (metadata, newPlan, report) = try await Task.detached(priority: .userInitiated) { [workflow] in
+                let metadata = workflow.readMetadata(for: currentAssets) { done, total in
+                    Task { @MainActor in
+                        // 进度更新走主线程，但不阻塞读取
+                        self.statusText = "⏳ 正在读取元数据… \(done)/\(total)"
+                    }
+                }
+                let plan = try workflow.makePlan(
+                    assets: currentAssets,
+                    metadata: metadata,
+                    template: RenameTemplate(pattern: pattern),
+                    projectName: project
+                )
+                Task { @MainActor in self.statusText = "⏳ 正在预检…" }
+                let report = PreflightEngine().run(plan: plan, assets: currentAssets, metadata: metadata)
+                return (metadata, plan, report)
+            }.value
+
             assetMetadata = metadata
-            plan = try workflow.makePlan(
-                assets: assets,
-                metadata: metadata,
-                template: RenameTemplate(pattern: templatePattern),
-                projectName: projectName.isEmpty ? nil : projectName
-            )
-            preflightReport = PreflightEngine().run(
-                plan: plan!,
-                assets: assets,
-                metadata: metadata,
-                destinationDirectory: folderURL
-            )
-            if preflightReport?.canExecute == true {
-                statusText = "📋 预检通过：\(plan?.operations.count ?? 0) 个文件将被重命名"
+            plan = newPlan
+            preflightReport = report
+            if report.canExecute {
+                statusText = "📋 预检通过：\(newPlan.operations.count) 个文件将被重命名"
             } else {
                 statusText = "⛔ 预检发现阻塞问题，不能执行"
             }
@@ -117,12 +130,23 @@ final class RenameWorkflowModel {
         }
     }
 
-    func executePlan() {
+    func executePlan() async {
         guard let transaction, let plan, preflightReport?.canExecute != false else { return }
+        isBusy = true
+        defer { isBusy = false }
         do {
-            let count = try transaction.execute(plan)
+            let executingPlan = plan
+            let total = executingPlan.operations.count
+            let count = try await Task.detached(priority: .userInitiated) {
+                try transaction.execute(executingPlan) { done, _ in
+                    Task { @MainActor in
+                        self.statusText = "⏳ 正在执行重命名… \(done)/\(total)"
+                    }
+                }
+            }.value
             self.plan = nil
-            reloadAssets()
+            preflightReport = nil
+            await reloadAssets()
             statusText = "✅ 已重命名 \(count) 个文件"
         } catch RenameError.destinationExists {
             statusText = "❌ 目标文件名已存在，整批未执行（Never Overwrite）"
@@ -135,14 +159,18 @@ final class RenameWorkflowModel {
     }
 
     /// 批次级撤销：整体回退最近一次批量执行
-    func undoLastBatch() {
+    func undoLastBatch() async {
         guard let engine else { return }
+        isBusy = true
+        defer { isBusy = false }
         do {
-            let restored = try engine.undoLastBatch()
+            let restored = try await Task.detached(priority: .userInitiated) {
+                try engine.undoLastBatch()
+            }.value
             if restored.isEmpty {
                 statusText = "没有可撤销的批次"
             } else {
-                reloadAssets()
+                await reloadAssets()
                 statusText = "↩️ 已撤销整批，恢复 \(restored.count) 个文件"
             }
         } catch {
@@ -152,14 +180,16 @@ final class RenameWorkflowModel {
     }
 
     /// 资产级撤销：整组回退某个资产的最近一次变更（Asset Atomicity）
-    func undoAsset(_ asset: PhotoAsset) {
+    func undoAsset(_ asset: PhotoAsset) async {
         guard let engine else { return }
         do {
-            let restored = try engine.undoAsset(asset.id)
+            let restored = try await Task.detached(priority: .userInitiated) {
+                try engine.undoAsset(asset.id)
+            }.value
             if restored.isEmpty {
                 statusText = "该资产没有可撤销的变更"
             } else {
-                reloadAssets()
+                await reloadAssets()
                 statusText = "↩️ 已撤销资产（\(restored.count) 个文件）"
             }
         } catch {
@@ -177,15 +207,24 @@ final class RenameWorkflowModel {
         refreshCanUndo()
     }
 
-    private func reloadAssets() {
+    private func reloadAssets() async {
         guard let folderURL else { return }
-        assets = (try? workflow.loadAssets(directory: folderURL)) ?? []
+        isBusy = true
+        defer { isBusy = false }
+        let url = folderURL
+        statusText = "⏳ 正在扫描…"
+        let loaded = await Task.detached(priority: .userInitiated) { [workflow] in
+            try? workflow.loadAssets(directory: url)
+        }.value ?? []
+
+        assets = loaded
         assetMetadata = [:]
         plan = nil
         preflightReport = nil
         if let selection, !assets.contains(where: { $0.id == selection }) {
             self.selection = nil
         }
+        statusText = "✅ \(url.lastPathComponent)：\(loaded.count) 组资产"
     }
 
     private func refreshCanUndo() {

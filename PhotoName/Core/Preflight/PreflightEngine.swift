@@ -55,8 +55,7 @@ struct PreflightEngine: Sendable {
     func run(
         plan: RenamePlan,
         assets: [PhotoAsset] = [],
-        metadata: [UUID: PhotoMetadata] = [:],
-        destinationDirectory: URL
+        metadata: [UUID: PhotoMetadata] = [:]
     ) -> PreflightReport {
         var issues: [PreflightIssue] = []
         let operations = plan.operations
@@ -80,14 +79,14 @@ struct PreflightEngine: Sendable {
             ))
         }
 
-        // 3. 非法目标名：名字本身非法，或目标不在目标目录的直接子项位置（防子目录逃逸）
-        let destinationPath = destinationDirectory.standardizedFileURL.path
+        // 3. 非法目标名：名字本身非法，或目标与原文件不在同一目录（重命名不跨目录，防路径逃逸）
         let invalid = operations.filter { op in
             let name = op.newURL.lastPathComponent
-            let escaped = op.newURL.deletingLastPathComponent().standardizedFileURL.path != destinationPath
+            let crossedDirectory = op.newURL.deletingLastPathComponent().standardizedFileURL
+                != op.originalURL.deletingLastPathComponent().standardizedFileURL
             return name.isEmpty || name.hasPrefix(".")
                 || name.contains(where: { Self.illegalCharacters.contains($0) })
-                || escaped
+                || crossedDirectory
         }
         if !invalid.isEmpty {
             issues.append(PreflightIssue(
@@ -96,11 +95,17 @@ struct PreflightEngine: Sendable {
             ))
         }
 
-        // 4. 目录写权限
-        if !FileManager.default.isWritableFile(atPath: destinationDirectory.path) {
+        // 4. 目标目录写权限（递归扫描时可能涉及多个子目录，逐个检查）
+        let targetDirectories = Dictionary(grouping: operations) {
+            $0.newURL.deletingLastPathComponent().standardizedFileURL
+        }
+        let unwritable = targetDirectories.keys.filter {
+            !FileManager.default.isWritableFile(atPath: $0.path)
+        }
+        if !unwritable.isEmpty {
             issues.append(PreflightIssue(
                 kind: .folderNotWritable,
-                message: "文件夹没有写权限：\(destinationDirectory.lastPathComponent)"
+                message: "文件夹没有写权限：\(unwritable.prefix(3).map { $0.lastPathComponent }.joined(separator: "、"))\(unwritable.count > 3 ? " 等 \(unwritable.count) 个目录" : "")"
             ))
         }
 
