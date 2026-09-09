@@ -26,13 +26,31 @@ final class RenameWorkflowModel {
         plan?.operations.filter { $0.assetID == asset.id } ?? []
     }
 
-    var templatePattern: String = RenameTemplate.builtinPresets[0].pattern
-    var projectName: String = ""
+    var templatePattern: String = RenameTemplate.builtinPresets[0].pattern {
+        didSet { scheduleLivePreview() }
+    }
+    var projectName: String = "" {
+        didSet { scheduleLivePreview() }
+    }
+
+    /// 实时示例名：用第一个资产渲染模板（配合资产列表/Inspector 的完整预览）
+    var templateSample: TemplateSamplePreview.Outcome? {
+        TemplateSamplePreview().make(
+            assets: assets,
+            metadata: assetMetadata,
+            template: RenameTemplate(pattern: templatePattern),
+            projectName: projectName.isEmpty ? nil : projectName
+        )
+    }
 
     private let workflow = RenameWorkflow()
     private var transaction: RenameTransaction?
     private var engine: RenameEngine?
     private var isAccessingScope = false
+    /// 元数据缓存：模板每次改动都会重新生成预览，避免反复重读几千个文件的 EXIF
+    private var metadataCache: (assetIDs: [UUID], metadata: [UUID: PhotoMetadata])?
+    private var previewDebounceTask: Task<Void, Never>?
+    private var previewRunID = 0
 
     private var journalURL: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -85,37 +103,55 @@ final class RenameWorkflowModel {
     // MARK: - 预览与执行（重 I/O 均在后台线程，UI 保持响应）
 
     func makePreviewPlan() async {
-        guard let folderURL else { return }
+        guard folderURL != nil, !assets.isEmpty, !templatePattern.isEmpty else { return }
         isBusy = true
         defer { isBusy = false }
+        previewRunID += 1
+        let runID = previewRunID
         do {
             let currentAssets = assets
+            let ids = currentAssets.map(\.id)
+
+            // 元数据只在资产集合变化时重读；模板改动直接复用缓存（实时预览的关键）
+            let metadata: [UUID: PhotoMetadata]
+            if let cache = metadataCache, cache.assetIDs == ids {
+                metadata = cache.metadata
+            } else {
+                statusText = "⏳ 正在读取元数据…"
+                metadata = await Task.detached(priority: .userInitiated) { [workflow] in
+                    workflow.readMetadata(for: currentAssets) { done, total in
+                        Task { @MainActor in
+                            self.statusText = "⏳ 正在读取元数据… \(done)/\(total)"
+                        }
+                    }
+                }.value
+                metadataCache = (ids, metadata)
+            }
+
             let pattern = templatePattern
             let project = projectName.isEmpty ? nil : projectName
-
-            let (metadata, newPlan, report) = try await Task.detached(priority: .userInitiated) { [workflow] in
-                let metadata = workflow.readMetadata(for: currentAssets) { done, total in
-                    Task { @MainActor in
-                        // 进度更新走主线程，但不阻塞读取
-                        self.statusText = "⏳ 正在读取元数据… \(done)/\(total)"
-                    }
-                }
+            statusText = "⏳ 正在预检…"
+            let (newPlan, report) = try await Task.detached(priority: .userInitiated) { [workflow] in
                 let plan = try workflow.makePlan(
                     assets: currentAssets,
                     metadata: metadata,
                     template: RenameTemplate(pattern: pattern),
                     projectName: project
                 )
-                Task { @MainActor in self.statusText = "⏳ 正在预检…" }
                 let report = PreflightEngine().run(plan: plan, assets: currentAssets, metadata: metadata)
-                return (metadata, plan, report)
+                return (plan, report)
             }.value
+
+            // 防抖期间用户又改了模板：丢弃过期结果
+            guard runID == previewRunID else { return }
 
             assetMetadata = metadata
             plan = newPlan
             preflightReport = report
             if report.canExecute {
-                statusText = "📋 预检通过：\(newPlan.operations.count) 个文件将被重命名"
+                statusText = newPlan.operations.isEmpty
+                    ? "✅ 所有文件已符合当前模板，无需重命名"
+                    : "📋 预检通过：\(newPlan.operations.count) 个文件将被重命名"
             } else {
                 statusText = "⛔ 预检发现阻塞问题，不能执行"
             }
@@ -127,6 +163,17 @@ final class RenameWorkflowModel {
             statusText = "❌ 生成预览失败：\(error.localizedDescription)"
             plan = nil
             preflightReport = nil
+        }
+    }
+
+    /// 模板输入的防抖实时预览：400ms 内的连续击键只触发一次完整预检
+    private func scheduleLivePreview() {
+        previewDebounceTask?.cancel()
+        guard !assets.isEmpty else { return }
+        previewDebounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            await self?.makePreviewPlan()
         }
     }
 
@@ -219,12 +266,15 @@ final class RenameWorkflowModel {
 
         assets = loaded
         assetMetadata = [:]
+        metadataCache = nil
         plan = nil
         preflightReport = nil
         if let selection, !assets.contains(where: { $0.id == selection }) {
             self.selection = nil
         }
         statusText = "✅ \(url.lastPathComponent)：\(loaded.count) 组资产"
+        // 扫描完成后自动生成一次预览（模板已在输入框中）
+        scheduleLivePreview()
     }
 
     private func refreshCanUndo() {

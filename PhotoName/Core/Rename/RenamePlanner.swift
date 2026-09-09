@@ -28,10 +28,14 @@ struct RenamePlanner: Sendable {
             for resource in asset.resources {
                 let ext = resource.url.pathExtension
                 let newName = ext.isEmpty ? baseName : "\(baseName).\(ext)"
+                let newURL = resource.url.deletingLastPathComponent().appending(path: newName)
+                // 恒等操作（目标 == 原路径，例如已按此模板命名过的目录）不是改名，跳过，
+                // 否则预检会把"目标已存在"误判为阻塞（改名成自己永远是无害 no-op）
+                if newURL.standardizedFileURL == resource.url.standardizedFileURL { continue }
                 operations.append(
                     RenameOperation(
                         originalURL: resource.url,
-                        newURL: resource.url.deletingLastPathComponent().appending(path: newName),
+                        newURL: newURL,
                         assetID: asset.id
                     )
                 )

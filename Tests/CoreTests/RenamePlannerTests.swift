@@ -115,4 +115,33 @@ final class RenamePlannerTests: XCTestCase {
         )
         XCTAssertEqual(plan.operations.first?.newURL.lastPathComponent, "\(rendered).ARW")
     }
+
+    // MARK: - 恒等操作过滤（改名成自己的名字是 no-op，不是冲突）
+
+    /// 已按模板命名过的目录再次预览：不应产生任何操作，也不应触发"目标已存在"阻塞
+    func test_plan_identityRename_producesNoOperations() throws {
+        let group = asset(["20260902_0001.ARW", "20260902_0001.JPG", "20260902_0001.XMP"])
+        let plan = try planner.makePlan(
+            assets: [group],
+            metadata: [group.id: PhotoMetadata(captureTime: sampleDate)],
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{index}")
+        )
+        XCTAssertTrue(plan.operations.isEmpty, "恒等重命名应被过滤")
+    }
+
+    /// 混合目录：只有真正需要改名的文件进入方案
+    func test_plan_mixedBatch_keepsOnlyRealRenames() throws {
+        let alreadyNamed = asset(["20260902_0001.ARW"])
+        let notNamed = asset(["DSC_0042.ARW"])
+        let plan = try planner.makePlan(
+            assets: [alreadyNamed, notNamed],
+            metadata: [
+                alreadyNamed.id: PhotoMetadata(captureTime: sampleDate),
+                notNamed.id: PhotoMetadata(captureTime: sampleDate),
+            ],
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{index}")
+        )
+        XCTAssertEqual(plan.operations.count, 1)
+        XCTAssertEqual(plan.operations.first?.originalURL.lastPathComponent, "DSC_0042.ARW")
+    }
 }

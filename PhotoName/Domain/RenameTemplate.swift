@@ -11,12 +11,17 @@ struct RenameTemplate: Sendable, Equatable {
     }
 }
 
+/// 内置预设（PRD F-07）：显示名 + pattern，供 UI 的 Preset 选择器使用
+struct RenameTemplatePreset: Sendable, Equatable {
+    let name: String
+    let pattern: String
+}
+
 extension RenameTemplate {
-    /// 内置预设（PRD F-07）
-    static let builtinPresets: [RenameTemplate] = [
-        RenameTemplate(pattern: "{YYYY}{MM}{DD}_{index}"),
-        RenameTemplate(pattern: "{YYYY}{MM}{DD}_{camera}_{index}"),
-        RenameTemplate(pattern: "{project}_{YYYY}{MM}{DD}_{index}"),
-        RenameTemplate(pattern: "{project}_{YYYY}{MM}{DD}_{camera}_{index}"),
+    static let builtinPresets: [RenameTemplatePreset] = [
+        RenameTemplatePreset(name: "日期_序号", pattern: "{YYYY}{MM}{DD}_{index}"),
+        RenameTemplatePreset(name: "日期_机身_序号", pattern: "{YYYY}{MM}{DD}_{camera}_{index}"),
+        RenameTemplatePreset(name: "项目_日期_序号", pattern: "{project}_{YYYY}{MM}{DD}_{index}"),
+        RenameTemplatePreset(name: "项目_日期_机身_序号", pattern: "{project}_{YYYY}{MM}{DD}_{camera}_{index}"),
     ]
 }

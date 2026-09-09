@@ -10,23 +10,27 @@ struct RenameTransaction: Sendable {
     /// Journal 按 64 条缓冲批量落盘：兼顾大目录性能与崩溃时最多丢失一小段记录（Crash Recovery 在 Phase 5 正式设计）。
     @discardableResult
     func execute(_ plan: RenamePlan, progress: (@Sendable (Int, Int) -> Void)? = nil) throws -> Int {
+        // 恒等操作（目标 == 原路径）是 no-op：跳过预检与执行，不写 Journal（防御性过滤，
+        // 正常情况下 RenamePlanner 已过滤）
+        let operations = plan.operations.filter { $0.originalURL.standardizedFileURL != $0.newURL.standardizedFileURL }
+
         // 批内重复目标（例如模板漏了 {index} 导致整批同名）
-        let targets = plan.operations.map { $0.newURL.path }
+        let targets = operations.map { $0.newURL.path }
         if Set(targets).count != targets.count {
             throw RenameError.duplicateDestinationInBatch
         }
 
         // Never Overwrite（PRD §12）：预检全部目标，任一已存在则整体不执行
-        for operation in plan.operations where FileManager.default.fileExists(atPath: operation.newURL.path) {
+        for operation in operations where FileManager.default.fileExists(atPath: operation.newURL.path) {
             throw RenameError.destinationExists
         }
 
         var completed = 0
-        let total = plan.operations.count
+        let total = operations.count
         let transactionID = UUID()
         var journalBuffer: [RenameRecord] = []
 
-        for operation in plan.operations {
+        for operation in operations {
             try FileManager.default.moveItem(at: operation.originalURL, to: operation.newURL)
             journalBuffer.append(
                 RenameRecord(

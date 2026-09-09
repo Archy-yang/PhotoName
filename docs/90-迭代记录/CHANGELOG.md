@@ -2,6 +2,24 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [Unreleased]
+
+### Added
+
+- **F-05 拍摄时间 fallback 链**（2026-09-04）：`CaptureTimeResolver` 按 EXIF → 媒体创建日期（Spotlight）→ 文件创建日期 → 文件修改日期取时间；实际来源记入 `captureTimeSource`，预检对非 EXIF 来源发橙色警告
+- **模板 Preset 选择器 + 实时预览**（2026-09-08）：内置预设带显示名（日期_序号等 4 个）；模板/项目名改动 400ms 防抖后自动重新预览，「生成预览」按钮移除；示例名即时渲染（复用 `RenamePlanner` 保证与执行输出一致），模板错误（缺拍摄时间/缺项目名/未知变量）当场提示
+- **元数据缓存**：EXIF 读取仅在资产集合变化时执行，模板实时预览不再重读大目录
+- **预览融入资产列表**：每行「原名 → 新名（绿色）」，独立的改名预览 Section 移除
+
+### Fixed
+
+- **恒等重命名被误判为冲突**（2026-09-08）：执行后重新预览时新名 == 原名，Never Overwrite 误报"目标已存在"整批阻塞。`RenamePlanner` 过滤恒等操作（已命名目录 → "无需重命名"），`RenameTransaction` 防御性再过滤；踩坑记录 #3
+- 资产列表最后一行被底部工作流条遮挡（VStack 布局替代 overlay）
+
+### Performance
+
+- 大目录（3000 文件）验证通过：扫描/EXIF/预检/执行全程异步 + 进度反馈；Journal 按 64 条缓冲批量落盘（消除 O(n²) 整文件重写；崩溃丢记录窗口由 Crash Recovery 收口，进行中）
+
 ## [v0.1.0] - 2026-09-04
 
 首个内部里程碑：PRD §8 核心工作流端到端打通（骨架级实现，macOS）。
@@ -26,7 +44,7 @@
 
 - RAW 格式（ARW/CR3/NEF/RAF）EXIF 读取未用真实样本验证
 - EXIF 时间无时区语义，按本机时区解释；跨时区场景待设计
-- 拍摄时间 fallback 链（F-05）未实现，缺 EXIF + 日期模板直接报错
-- Scanner 全量加载，大目录（3000+ 文件）性能未验证
+- Journal 缓冲落盘的崩溃丢记录窗口（Crash Recovery 进行中）
+- 大列表渲染（3000 行 List）未做虚拟化优化
 - iOS target 可构建未适配，iPadOS 未适配
 - Commerce 仍为 stub（买断制方向已定，Phase C0 待启动）

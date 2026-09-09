@@ -139,6 +139,30 @@ final class RenameTransactionTests: XCTestCase {
         XCTAssertTrue(try journal.allRecords().isEmpty)
     }
 
+    // MARK: - 恒等操作（目标 == 原路径）是 no-op，不得触发 Never Overwrite
+
+    func test_execute_identityOperations_areSkippedAsNoOp() throws {
+        try makeFile("20260902_0001.ARW")
+        try makeFile("DSC_0042.ARW")
+        let plan = RenamePlan(operations: [
+            RenameOperation(
+                originalURL: workDir.appending(path: "20260902_0001.ARW"),
+                newURL: workDir.appending(path: "20260902_0001.ARW")
+            ),
+            RenameOperation(
+                originalURL: workDir.appending(path: "DSC_0042.ARW"),
+                newURL: workDir.appending(path: "20260902_0042.ARW")
+            ),
+        ])
+
+        let count = try transaction.execute(plan)
+
+        XCTAssertEqual(count, 1, "恒等操作不应计入执行数")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: workDir.appending(path: "20260902_0001.ARW").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: workDir.appending(path: "DSC_0042.ARW").path))
+        XCTAssertEqual(try journal.allRecords().count, 1, "恒等操作不写 Journal")
+    }
+
     // MARK: - 批次级撤销（一次操作整体回退）
 
     func test_execute_thenUndoLastBatch_restoresAllFilesAndClearsBatch() throws {

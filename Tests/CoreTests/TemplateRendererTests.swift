@@ -102,7 +102,7 @@ final class TemplateRendererTests: XCTestCase {
 
     func test_builtinPresets_renderWithFullContext() throws {
         for preset in RenameTemplate.builtinPresets {
-            let output = try renderer.render(preset, context: fullContext, index: 3)
+            let output = try renderer.render(RenameTemplate(pattern: preset.pattern), context: fullContext, index: 3)
             XCTAssertFalse(output.isEmpty, "预设 \(preset.pattern) 渲染结果不应为空")
         }
     }

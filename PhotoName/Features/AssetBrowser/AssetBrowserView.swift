@@ -65,26 +65,21 @@ struct AssetBrowserView: View {
                 )
             } else {
                 List(selection: $model.selection) {
-                    if model.plan != nil {
-                        Section("改名预览") {
-                            ForEach(Array(model.plan!.operations.enumerated()), id: \.offset) { _, operation in
-                                HStack(spacing: 8) {
-                                    Text(operation.originalURL.lastPathComponent)
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(.secondary)
-                                    Image(systemName: "arrow.right")
-                                        .font(.caption2)
-                                    Text(operation.newURL.lastPathComponent)
-                                        .font(.caption.monospaced())
-                                }
-                            }
-                        }
-                    }
                     Section("资产（\(model.assets.count) 组）") {
                         ForEach(model.assets) { asset in
-                            VStack(alignment: .leading) {
-                                Text(baseName(of: asset))
-                                    .font(.callout.weight(.medium))
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(baseName(of: asset))
+                                        .font(.callout.weight(.medium))
+                                    if let newName = newBaseName(of: asset) {
+                                        Image(systemName: "arrow.right")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                        Text(newName)
+                                            .font(.callout.monospaced())
+                                            .foregroundStyle(.green)
+                                    }
+                                }
                                 Text(asset.resources.map(\.originalFilename).joined(separator: "  ·  "))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -182,12 +177,15 @@ struct AssetBrowserView: View {
             if let report = model.preflightReport, !report.issues.isEmpty {
                 preflightSummary(report)
             }
+            if let sample = model.templateSample {
+                templateSampleLine(sample)
+            }
             HStack(spacing: 12) {
-                Text("模板")
-                    .font(.callout)
+                presetMenu
                 TextField("{YYYY}{MM}{DD}_{index}", text: $model.templatePattern)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 300)
+                insertVariableMenu
                 Text("项目")
                     .font(.callout)
                 TextField("可选，配合 {project}", text: $model.projectName)
@@ -202,16 +200,89 @@ struct AssetBrowserView: View {
                 }
                 Button("撤销上一批") { Task { await model.undoLastBatch() } }
                     .disabled(!model.canUndo || model.isBusy)
-                Button("生成预览") { Task { await model.makePreviewPlan() } }
-                    .disabled(model.assets.isEmpty || model.templatePattern.isEmpty || model.isBusy)
                 Button("执行重命名") { Task { await model.executePlan() } }
                     .buttonStyle(.borderedProminent)
-                    .disabled(model.plan == nil || model.preflightReport?.canExecute == false || model.isBusy)
+                    .disabled(model.plan == nil || model.plan?.operations.isEmpty == true || model.preflightReport?.canExecute == false || model.isBusy)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(.bar)
+    }
+
+    // MARK: - 模板编辑（Preset / 变量插入 / 实时示例名）
+
+    private var presetMenu: some View {
+        Menu {
+            ForEach(RenameTemplate.builtinPresets, id: \.pattern) { preset in
+                Button(preset.name) { model.templatePattern = preset.pattern }
+            }
+        } label: {
+            Label("预设", systemImage: "text.badge.checkmark")
+        }
+        .fixedSize()
+    }
+
+    /// 变量以菜单分组插入（追加到模板末尾，用户可再拖动/编辑微调）
+    private var insertVariableMenu: some View {
+        Menu {
+            Menu("时间") {
+                ForEach(["{YYYY}", "{MM}", "{DD}", "{HH}", "{mm}", "{ss}"], id: \.self) {
+                    insertVariableButton($0)
+                }
+            }
+            Menu("拍摄信息") {
+                ForEach(["{camera}", "{lens}"], id: \.self) {
+                    insertVariableButton($0)
+                }
+            }
+            Menu("其他") {
+                ForEach(["{index}", "{original}", "{project}"], id: \.self) {
+                    insertVariableButton($0)
+                }
+            }
+        } label: {
+            Label("插入变量", systemImage: "curlybraces")
+        }
+        .fixedSize()
+    }
+
+    private func insertVariableButton(_ variable: String) -> some View {
+        Button(variable) { model.templatePattern += variable }
+    }
+
+    @ViewBuilder
+    private func templateSampleLine(_ sample: TemplateSamplePreview.Outcome) -> some View {
+        HStack(spacing: 6) {
+            switch sample {
+            case .rendered(let name):
+                Label {
+                    Text("示例：\(name)")
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                } icon: {
+                    Image(systemName: "arrow.turn.down.right")
+                }
+                .foregroundStyle(.secondary)
+            case .failed(let error):
+                Label(sampleErrorMessage(for: error), systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func sampleErrorMessage(for error: TemplateError) -> String {
+        switch error {
+        case .missingCaptureTime:
+            return "该资产缺少拍摄时间，日期变量无法预览"
+        case .missingProjectName:
+            return "模板使用了 {project}，请填写项目名"
+        case .unknownVariable(let name):
+            return "未知变量 {\(name)}，请检查模板"
+        }
     }
 
     private func preflightSummary(_ report: PreflightReport) -> some View {
@@ -231,6 +302,11 @@ struct AssetBrowserView: View {
 
     private func baseName(of asset: PhotoAsset) -> String {
         asset.resources.first.map { $0.url.deletingPathExtension().lastPathComponent } ?? "未知"
+    }
+
+    /// 该资产在当前方案中的新基础名（无预览方案或无操作时为 nil）
+    private func newBaseName(of asset: PhotoAsset) -> String? {
+        model.operations(for: asset).first.map { $0.newURL.deletingPathExtension().lastPathComponent }
     }
 
     private static let timeFormatter: DateFormatter = {
