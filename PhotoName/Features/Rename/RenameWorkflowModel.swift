@@ -83,9 +83,14 @@ final class RenameWorkflowModel {
         else { return }
 
         var bookmarkIsStale = false
+        #if os(macOS)
+        let resolveOptions: URL.BookmarkResolutionOptions = .withSecurityScope
+        #else
+        let resolveOptions: URL.BookmarkResolutionOptions = []
+        #endif
         guard let url = try? URL(
             resolvingBookmarkData: data,
-            options: .withSecurityScope,
+            options: resolveOptions,
             relativeTo: nil,
             bookmarkDataIsStale: &bookmarkIsStale
         ) else {

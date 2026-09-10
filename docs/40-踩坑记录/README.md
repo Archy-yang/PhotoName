@@ -38,3 +38,13 @@
 **解决**：恒等操作是 no-op，不是冲突。`RenamePlanner` 生成方案时过滤掉 `newURL == originalURL` 的操作（再次预览已命名目录 → 方案为空 → 提示"无需重命名"并禁用执行按钮）；`RenameTransaction.execute` 再做一次防御性过滤（不计执行数、不写 Journal、不参与预检）。两层都用 `standardizedFileURL` 比较。
 
 **教训**：安全检查（Never Overwrite）和幂等性（重复应用同一方案）有交互——"目标已存在"要先排除"目标就是源"。任何自动重跑预览/预检的流程都会踩到这条。
+
+### 4. StoreKit 测试的失败注入会持久污染本地模拟服务器 ASPctaneS（2026-09-10，待解决）
+
+**现象**：`SKTestSession` 中执行过 `failTransactionsEnabled = true` 的用例后，之后**所有** `Product.purchase()` 购买请求被本地服务器拒绝：`AMSErrorDomain Code=305 "Server canceled the purchase"`，payload 带 `"cancel-purchase-batch" = 1`。独立进程单跑用例也失败。
+
+**排查结论**：购买请求打向 `localhost:<port>` 的本地模拟 App Store 服务器 **`ASOctaneS`**（Xcode StoreKit 测试后端）。两次相隔 26 分钟的失败请求端口相同，说明状态在这个常驻进程里。以下操作**全部无效**：杀 `storekitagent`、清 `~/Library/Caches/com.apple.storekitagent`、清 `group.com.apple.storekit/storeUser.db`、重启 StoreKit UIService、`SKTestSession.resetToDefaultState()`、setUp 里重置 `failTransactionsEnabled`。
+
+**解决（待验证）**：`killall ASOctaneS` 后重跑（进程按需自动重启）。若有效，防御措施：失败注入用例放在独立 suite 最后执行，或tearDown 恢复 + 全程避免 `failTransactionsEnabled`。
+
+**教训**：StoreKit 测试环境的状态散落在多个常驻进程（storekitagent / ASPctaneS / UIService），"清缓存重启 agent"不够；遇到本地服务器行为异常先 `lsof -iTCP:<port>` 找到真正的服务进程。

@@ -21,8 +21,10 @@ schemes:
         PhotoNameTests_macOS: [test]
     run:
       config: Debug
+      storeKitConfiguration: PhotoName/Commerce/StoreKit/PhotoName.storekit
     test:
       config: Debug
+      storeKitConfiguration: PhotoName/Commerce/StoreKit/PhotoName.storekit
       targets:
         - PhotoNameTests_macOS
   PhotoName_iOS:
@@ -67,6 +69,9 @@ targets:
     platform: macOS
     sources:
       - path: Tests
+      # SKTestSession 需要在 bundle 里找到 .storekit 配置
+      - path: PhotoName/Commerce/StoreKit/PhotoName.storekit
+        buildPhase: resources
     dependencies:
       - target: PhotoName_macOS
     settings:
@@ -79,6 +84,8 @@ targets:
     platform: iOS
     sources:
       - path: Tests
+      - path: PhotoName/Commerce/StoreKit/PhotoName.storekit
+        buildPhase: resources
     dependencies:
       - target: PhotoName_iOS
     settings:

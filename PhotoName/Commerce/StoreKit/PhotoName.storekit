@@ -1,19 +1,38 @@
 {
   "identifier" : "8A3B9C2D-1E4F-4A5B-8C6D-7E8F9A0B1C2D",
-  "type" : "Configuration",
-  "version" : 3,
+  "nonRenewingSubscriptions" : [
+
+  ],
   "products" : [
     {
-      "id" : "com.photoname.pro",
-      "type" : "NonConsumable",
-      "displayName" : "PhotoName Pro",
-      "description" : "Lifetime license for unlimited assets, custom templates, and professional workflows.",
-      "price" : 9.99,
-      "internalID" : "PRO_LIFETIME_001"
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "669988001",
+      "localizations" : [
+        {
+          "description" : "Lifetime license: unlimited assets, custom templates, multi-camera timeline.",
+          "displayName" : "PhotoName Pro",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.photoname.pro",
+      "referenceName" : "PhotoName Pro (Lifetime)",
+      "type" : "NonConsumable"
     }
   ],
   "settings" : {
-    "_applicationInternalID" : "",
-    "_developerTeamID" : ""
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
   }
 }

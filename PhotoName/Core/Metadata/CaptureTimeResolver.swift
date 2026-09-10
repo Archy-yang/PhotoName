@@ -12,9 +12,14 @@ struct CaptureTimeResolver: Sendable {
         /// 标准实现：Spotlight Media Creation Date → 文件创建日期 → 文件修改日期
         static let standard = Providers(
             mediaCreation: { url in
+                #if os(macOS)
                 // Spotlight 未索引的卷（部分外接盘/SD 卡）返回 nil，自然落到下一级
                 guard let item = MDItemCreateWithURL(kCFAllocatorDefault, url as CFURL) else { return nil }
                 return MDItemCopyAttribute(item, kMDItemContentCreationDate) as? Date
+                #else
+                // iOS 无 MDItem 文件元数据 API，直接落下一级（文件日期）
+                return nil
+                #endif
             },
             fileCreation: { url in
                 try? url.resourceValues(forKeys: [.creationDateKey]).creationDate

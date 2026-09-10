@@ -11,6 +11,8 @@
 - **元数据缓存**：EXIF 读取仅在资产集合变化时执行，模板实时预览不再重读大目录
 - **预览融入资产列表**：每行「原名 → 新名（绿色）」，独立的改名预览 Section 移除
 - **Crash Recovery**（2026-09-10，Phase 5 收尾）：批量执行前把完整意图清单原子写入活动标记文件，成功后清除；中断后启动时对照磁盘调和现场（已完成/未执行/冲突三类，冲突绝不自动处理），UI 橙色横幅引导「回退已改名文件 / 忽略」。Journal 64 条缓冲的崩溃丢记录窗口由标记兜底——丢的只是账本，意图清单永远完整
+- **Commerce C0 StoreKit Spike**（2026-09-10）：`PurchaseManager`（StoreKit 唯一入口：加载/购买/恢复）+ `EntitlementManager` 买断制重构（NonConsumable `com.photoname.pro`，`Transaction.currentEntitlements` 为 Source of Truth，本地缓存快速启动，退款自动失效）；`.storekit` 配置规范化并挂载到 scheme；SKTestSession 全链路测试（购买/退款/恢复/失败注入/缓存跨实例）
+- **iOS target 构建恢复**：Spotlight MDItem 与 bookmark security-scope 的平台守卫（`#if os(macOS)`），iOS scheme 构建通过
 
 ### Fixed
 
@@ -45,6 +47,8 @@
 
 - RAW 格式（ARW/CR3/NEF/RAF）EXIF 读取未用真实样本验证
 - EXIF 时间无时区语义，按本机时区解释；跨时区场景待设计
+- StoreKit 购买路径的 5 个测试临时 skip：本地模拟服务器 ASPctaneS 被失败注入污染（踩坑 #4），`killall ASOctaneS` 后恢复并删除 skip；全链路曾在健康环境 3 轮全绿
+- FeatureGate 仍为 stub：Free/Pro 分层、批量限制、Paywall 未接入（C2/C3 待启动）
 - 大列表渲染（3000 行 List）未做虚拟化优化
 - iOS target 可构建未适配，iPadOS 未适配
 - Commerce 仍为 stub（买断制方向已定，Phase C0 待启动）
