@@ -13,6 +13,8 @@ final class RenameWorkflowModel {
     private(set) var canUndo = false
     /// 重 I/O（扫描/读 EXIF/批量改名）进行中，UI 据此禁用操作
     private(set) var isBusy = false
+    /// 检测到的中断批次（Crash Recovery）：非 nil 时 UI 显示恢复提示条
+    private(set) var interruptedBatch: InterruptedBatch?
 
     /// 当前选中的资产（Inspector 展示用）
     var selection: PhotoAsset.ID?
@@ -46,6 +48,7 @@ final class RenameWorkflowModel {
     private let workflow = RenameWorkflow()
     private var transaction: RenameTransaction?
     private var engine: RenameEngine?
+    private var activeStore: ActiveTransactionStore?
     private var isAccessingScope = false
     /// 元数据缓存：模板每次改动都会重新生成预览，避免反复重读几千个文件的 EXIF
     private var metadataCache: (assetIDs: [UUID], metadata: [UUID: PhotoMetadata])?
@@ -249,9 +252,63 @@ final class RenameWorkflowModel {
 
     private func activateJournal() {
         let journal = RenameJournal(fileURL: journalURL)
-        transaction = RenameTransaction(journal: journal)
+        let store = ActiveTransactionStore(
+            fileURL: journalURL.deletingLastPathComponent().appending(path: "rename-journal-active.json")
+        )
+        activeStore = store
+        transaction = RenameTransaction(journal: journal, activeStore: store)
         engine = RenameEngine(journal: journal)
         refreshCanUndo()
+        Task { await checkInterruptedBatch() }
+    }
+
+    // MARK: - 崩溃恢复（PRD F-12）
+
+    /// 获得文件夹访问权后检查：是否存在被中断的批次（活动标记 + 磁盘调和）
+    private func checkInterruptedBatch() async {
+        guard let activeStore else { return }
+        guard let marker = try? activeStore.load() else { return }
+        let reconciled = await Task.detached(priority: .userInitiated) {
+            try? RecoveryEngine().reconcile(marker)
+        }.value
+
+        guard let batch = reconciled else { return }
+        if batch.completed.isEmpty && batch.conflicts.isEmpty {
+            // 一次都没动文件（执行刚开始就中断）：直接清标记，不打扰用户
+            try? activeStore.clear()
+            return
+        }
+        interruptedBatch = batch
+    }
+
+    /// 回退中断批次：已完成部分逆序恢复，清理 Journal 记录与标记
+    func rollbackInterruptedBatch() async {
+        guard let batch = interruptedBatch, let activeStore else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            let journal = engine?.journal ?? RenameJournal(fileURL: journalURL)
+            let restored = try await Task.detached(priority: .userInitiated) {
+                try RecoveryEngine().rollback(batch, journal: journal, activeStore: activeStore)
+            }.value
+            interruptedBatch = nil
+            await reloadAssets()
+            var message = "↩️ 已恢复中断批次，回退 \(restored) 个文件"
+            if batch.conflicts.isEmpty == false {
+                message += "；\(batch.conflicts.count) 个状态异常的文件未动，请手动检查"
+            }
+            statusText = message
+        } catch {
+            statusText = "❌ 恢复失败：\(error.localizedDescription)"
+        }
+        refreshCanUndo()
+    }
+
+    /// 忽略中断批次：保持文件现状，仅清除标记（不再提示）
+    func dismissInterruptedBatch() {
+        try? activeStore?.clear()
+        interruptedBatch = nil
+        statusText = "已忽略中断批次，文件保持现状"
     }
 
     private func reloadAssets() async {

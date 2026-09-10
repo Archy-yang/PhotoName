@@ -163,6 +163,49 @@ final class RenameTransactionTests: XCTestCase {
         XCTAssertEqual(try journal.allRecords().count, 1, "恒等操作不写 Journal")
     }
 
+    // MARK: - 活动标记（Crash Recovery：执行前写意图清单，成功后清除）
+
+    private func makeTransaction(activeStore: ActiveTransactionStore) -> RenameTransaction {
+        RenameTransaction(journal: journal, activeStore: activeStore)
+    }
+
+    func test_execute_success_clearsActiveMarker() throws {
+        try makeFile("a.ARW")
+        let store = ActiveTransactionStore(fileURL: workDir.appending(path: "active.json"))
+        try makeTransaction(activeStore: store).execute(plan(originalNames: ["a.ARW"], newNames: ["x.ARW"]))
+        XCTAssertNil(try store.load(), "执行成功后标记必须清除")
+    }
+
+    /// 模拟执行中断途崩溃：后续操作源文件缺失 → moveItem 抛错 →
+    /// 标记留存，Journal 记录还在缓冲里未落盘（最坏情况），恢复只能靠标记调和
+    func test_execute_failsMidway_markerRemainsAndReconciles() throws {
+        try makeFile("a.ARW")
+        // b.ARW 故意不创建
+        let failingPlan = plan(originalNames: ["a.ARW", "b.ARW"], newNames: ["x.ARW", "y.ARW"])
+        let store = ActiveTransactionStore(fileURL: workDir.appending(path: "active.json"))
+        let crashing = makeTransaction(activeStore: store)
+
+        XCTAssertThrowsError(try crashing.execute(failingPlan))
+
+        let marker = try XCTUnwrap(try store.load(), "中断后标记必须留存")
+        XCTAssertEqual(marker.operations.count, 2, "标记应包含完整意图清单")
+
+        // 靠标记（而非 Journal）就能还原现场：a→x 已完成；b→y 因源文件缺失归入冲突，不自动处理
+        let batch = try RecoveryEngine().reconcile(marker)
+        XCTAssertEqual(batch.completed.map(\.newPath), [workDir.appending(path: "x.ARW").path])
+        XCTAssertEqual(batch.pending.count, 0)
+        XCTAssertEqual(batch.conflicts.count, 1)
+    }
+
+    /// 预检失败（目标已存在）发生在任何文件被触碰之前，不留标记
+    func test_execute_preflightFails_leavesNoMarker() throws {
+        try makeFile("a.ARW")
+        try makeFile("x.ARW")
+        let store = ActiveTransactionStore(fileURL: workDir.appending(path: "active.json"))
+        XCTAssertThrowsError(try makeTransaction(activeStore: store).execute(plan(originalNames: ["a.ARW"], newNames: ["x.ARW"])))
+        XCTAssertNil(try store.load())
+    }
+
     // MARK: - 批次级撤销（一次操作整体回退）
 
     func test_execute_thenUndoLastBatch_restoresAllFilesAndClearsBatch() throws {

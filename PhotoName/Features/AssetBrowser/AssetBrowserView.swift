@@ -18,7 +18,10 @@ struct AssetBrowserView: View {
             } detail: {
                 inspector
             }
-            // 工作流条放在 VStack 中占独立空间，列表内容不会被遮挡
+            // 恢复提示条与工作流条都在 VStack 中占独立空间，列表内容不会被遮挡
+            if let batch = model.interruptedBatch {
+                interruptedBatchBanner(batch)
+            }
             workflowBar
         }
         .fileImporter(
@@ -208,6 +211,32 @@ struct AssetBrowserView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(.bar)
+    }
+
+    private func interruptedBatchBanner(_ batch: InterruptedBatch) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
+                .font(.title3)
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("检测到上次执行中断：\(batch.completed.count) 个文件已改名，\(batch.pending.count) 个未执行")
+                    .font(.callout.weight(.medium))
+                if !batch.conflicts.isEmpty {
+                    Text("\(batch.conflicts.count) 个文件状态异常（源与目标同时存在/缺失），已跳过，请手动检查")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+            Spacer()
+            Button("忽略") { model.dismissInterruptedBatch() }
+                .disabled(model.isBusy)
+            Button("回退已改名文件") { Task { await model.rollbackInterruptedBatch() } }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.isBusy)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.orange.opacity(0.12))
     }
 
     // MARK: - 模板编辑（Preset / 变量插入 / 实时示例名）
