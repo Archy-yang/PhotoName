@@ -19,6 +19,9 @@ final class RenameWorkflowModel {
     private(set) var interruptedBatch: InterruptedBatch?
     /// 资产网格缩略图缓存（内存态，扫描后失效重建）
     let thumbnails = ThumbnailStore()
+    /// Free/Pro 分层（C2）：执行入口与模板编辑据此拦截
+    let featureGate = FeatureGate()
+    let entitlements = EntitlementManager.shared
 
     /// 当前选中的资产（Inspector 展示用）
     var selection: PhotoAsset.ID?

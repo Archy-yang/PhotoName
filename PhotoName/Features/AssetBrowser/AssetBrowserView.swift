@@ -73,6 +73,15 @@ struct AssetBrowserView: View {
                         .lineLimit(3)
                 }
             }
+            #if DEBUG
+            // 无开发者账号阶段的本地验证开关（上架前移除，见 C5 清单）
+            Section("开发") {
+                Toggle("模拟 Pro 权益", isOn: Binding(
+                    get: { model.entitlements.devProOverride },
+                    set: { model.entitlements.devProOverride = $0 }
+                ))
+            }
+            #endif
         }
         .scrollContentBackground(.hidden)
         .background(UITheme.panel)
@@ -258,10 +267,28 @@ struct AssetBrowserView: View {
 
     // MARK: - 底部工作流条（Template → Preview → Preflight → Rename）
 
+    /// 商业分层拦截提示（C2）：自定义模板 / 批量超限。非 nil 时禁用执行按钮，
+    /// 文案统一买断语义（无倒计时/无强制弹窗，§33）
+    private var commerceHint: String? {
+        if !model.featureGate.canUseTemplate(model.templatePattern) {
+            return model.featureGate.customTemplateMessage()
+        }
+        return model.featureGate.batchLimitMessage(assetCount: model.assets.count)
+    }
+
     private var workflowBar: some View {
         VStack(spacing: 0) {
             if let report = model.preflightReport, !report.issues.isEmpty {
                 preflightSummary(report)
+            }
+            if let hint = commerceHint {
+                Label(hint, systemImage: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(UITheme.amber)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .background(UITheme.amber.opacity(0.08))
             }
             if let sample = model.templateSample {
                 templateSampleLine(sample)
@@ -367,7 +394,7 @@ struct AssetBrowserView: View {
             .foregroundStyle(.black.opacity(0.85))
             .tint(UITheme.amber)
             .buttonStyle(.borderedProminent)
-            .disabled(model.plan == nil || model.plan?.operations.isEmpty == true || model.preflightReport?.canExecute == false || model.isBusy)
+            .disabled(model.plan == nil || model.plan?.operations.isEmpty == true || model.preflightReport?.canExecute == false || model.isBusy || commerceHint != nil)
     }
 
     /// 变量以菜单分组插入（追加到模板末尾，用户可再编辑微调）

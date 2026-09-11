@@ -107,10 +107,12 @@
 		E1D06265C01C97BE6ACDBB44 /* AssetGrouper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F22E71059BB6BFDC68B8EA7 /* AssetGrouper.swift */; };
 		E21BC0F82D5A39AB85B66F19 /* ThumbnailProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D6F7BB3C2E065AAB11E22AF /* ThumbnailProviderTests.swift */; };
 		E66FEC684F39817506DAA345 /* TemplateRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15A8A7879FBD08C4D919E0F7 /* TemplateRendererTests.swift */; };
+		E7D7395F22B08B213E5AE891 /* FeatureGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 418ED169DB98448CC2EEC562 /* FeatureGateTests.swift */; };
 		E7D953B77F9DD93610E01C4E /* ActiveTransactionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94C4BB6FBDCEBB12C2C97059 /* ActiveTransactionStoreTests.swift */; };
 		E8D37D6AEBB984408955C5FF /* FeatureGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAA3BD451A401FCB2A589E44 /* FeatureGate.swift */; };
 		E8F5B550507B703C605DF63F /* TemplateRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE2D53708F8D806B65D72B7 /* TemplateRenderer.swift */; };
 		EB42686BAF85CA9FF776BD6C /* AssetCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDA3EC0319D00400610424F /* AssetCardView.swift */; };
+		EB6A0A8B3B2D80CC41F5252E /* FeatureGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 418ED169DB98448CC2EEC562 /* FeatureGateTests.swift */; };
 		EEB5991560FB72A2F5677645 /* PhotoName.storekit in Resources */ = {isa = PBXBuildFile; fileRef = B39D0CF1A55E0460FE5AAA30 /* PhotoName.storekit */; };
 		F036BCE3C15D1FBC83CEA3D5 /* TemplateSamplePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = E001D863F1EA2C1A4784C9DF /* TemplateSamplePreview.swift */; };
 		F598867598744A696AD97B9D /* ActiveTransactionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E332643F7C2FCCCF18DBE2CA /* ActiveTransactionStore.swift */; };
@@ -149,6 +151,7 @@
 		2EE2D53708F8D806B65D72B7 /* TemplateRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateRenderer.swift; sourceTree = "<group>"; };
 		3A3939D1E285D91026C5A201 /* EntitlementManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementManager.swift; sourceTree = "<group>"; };
 		3DA24B61404EC033D8064617 /* RenameTransaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameTransaction.swift; sourceTree = "<group>"; };
+		418ED169DB98448CC2EEC562 /* FeatureGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureGateTests.swift; sourceTree = "<group>"; };
 		4719F765A36D0B75F3D3D443 /* MetadataReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataReader.swift; sourceTree = "<group>"; };
 		49ABC731C1D8F90EF1EC4173 /* PurchaseManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurchaseManagerTests.swift; sourceTree = "<group>"; };
 		4CBD68CC600CB5538E3C5699 /* PhotoName.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PhotoName.entitlements; sourceTree = "<group>"; };
@@ -290,6 +293,7 @@
 		36FE98359EB63B9B4B038DD4 /* CommerceTests */ = {
 			isa = PBXGroup;
 			children = (
+				418ED169DB98448CC2EEC562 /* FeatureGateTests.swift */,
 				49ABC731C1D8F90EF1EC4173 /* PurchaseManagerTests.swift */,
 			);
 			path = CommerceTests;
@@ -713,6 +717,7 @@
 				5A9EB487144E1975F15BB9D1 /* ActiveTransactionStoreTests.swift in Sources */,
 				6343E57A0F12DAA73A8E93AD /* AssetGrouperTests.swift in Sources */,
 				B0F3A46FD76D4149560F4014 /* CaptureTimeResolverTests.swift in Sources */,
+				E7D7395F22B08B213E5AE891 /* FeatureGateTests.swift in Sources */,
 				B229A11C01E4BF8CCF2C2177 /* MetadataReaderTests.swift in Sources */,
 				7D9FFFB3730E8C289041B0F6 /* PhotoScannerScaleTests.swift in Sources */,
 				FAEBDD6DCE098EDF1371BCEF /* PhotoScannerTests.swift in Sources */,
@@ -739,6 +744,7 @@
 				E7D953B77F9DD93610E01C4E /* ActiveTransactionStoreTests.swift in Sources */,
 				342F8B3B79AFCF3390F13FDA /* AssetGrouperTests.swift in Sources */,
 				FA27238A4C09917B4952BB7D /* CaptureTimeResolverTests.swift in Sources */,
+				EB6A0A8B3B2D80CC41F5252E /* FeatureGateTests.swift in Sources */,
 				7117A5C20A589D87C2901C37 /* MetadataReaderTests.swift in Sources */,
 				50AFEE6CEF1ABF1D16ECD18C /* PhotoScannerScaleTests.swift in Sources */,
 				C26F7165673A2E75AD2FDBAA /* PhotoScannerTests.swift in Sources */,
