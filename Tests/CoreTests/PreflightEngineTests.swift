@@ -26,6 +26,13 @@ final class PreflightEngineTests: XCTestCase {
         RenameOperation(originalURL: workDir.appending(path: original), newURL: workDir.appending(path: new))
     }
 
+    /// 创建真实文件并返回指向它的资产（Sequence 消解用例用）
+    private func makeAssetWithFile(_ name: String) -> PhotoAsset {
+        try? makeFile(name)
+        let url = workDir.appending(path: name)
+        return PhotoAsset(resources: [PhotoResource(url: url, kind: ResourceKind(fileExtension: (name as NSString).pathExtension))])
+    }
+
     // MARK: - 阻塞级
 
     func test_destinationExists_isBlocking() throws {
@@ -51,6 +58,32 @@ final class PreflightEngineTests: XCTestCase {
         )
 
         XCTAssertTrue(report.blockingIssues.contains { $0.kind == .invalidTargetName })
+    }
+
+    // MARK: - Duplicate Timestamp 的 Sequence 消解（PRD F-09）：警告而非阻塞
+
+    /// Planner 已用 -2/-3 消解同名 → 不再判批内重复阻塞，但必须显式告知用户（§12 Explicit Warning）
+    func test_sequenceResolvedDuplicates_isWarningNotBlocking() throws {
+        let first = makeAssetWithFile("DSC_0001.ARW")
+        let second = makeAssetWithFile("DSC_0002.ARW")
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 2, hour: 10, minute: 31, second: 22))!
+        let plan = try RenamePlanner().makePlan(
+            assets: [first, second],
+            metadata: [
+                first.id: PhotoMetadata(captureTime: date),
+                second.id: PhotoMetadata(captureTime: date),
+            ],
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{HH}{mm}{ss}")
+        )
+        XCTAssertFalse(plan.sequenceResolvedAssetIDs.isEmpty, "前置：Planner 应已消解")
+
+        let report = engine.run(plan: plan, assets: [first, second], metadata: [:])
+
+        XCTAssertFalse(report.blockingIssues.contains { $0.kind == .duplicateDestination }, "已消解的同名不应阻塞")
+        XCTAssertTrue(report.canExecute)
+        XCTAssertEqual(report.warnings.filter { $0.kind == .duplicateTimestampResolved }.count, 1, "消解必须显式告知")
+        // 消解后的文件真实存在于磁盘（makePlan 引用的目标不会已存在）
+        XCTAssertFalse(FileManager.default.fileExists(atPath: plan.operations[1].newURL.path))
     }
 
     func test_nonWritableDirectory_isBlocking() throws {

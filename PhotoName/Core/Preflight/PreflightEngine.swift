@@ -16,6 +16,8 @@ enum PreflightIssueKind: Equatable, Sendable {
     case fallbackCaptureTime
     /// RAW/JPEG 资产缺少 XMP sidecar
     case missingSidecar
+    /// 连拍同秒重名已由 Sequence 消解（自动追加 -2/-3，PRD F-09）——显式告知，非阻塞
+    case duplicateTimestampResolved
 }
 
 extension PreflightIssueKind {
@@ -24,7 +26,7 @@ extension PreflightIssueKind {
         switch self {
         case .destinationExists, .duplicateDestination, .invalidTargetName, .folderNotWritable:
             return true
-        case .missingCaptureTime, .fallbackCaptureTime, .missingSidecar:
+        case .missingCaptureTime, .fallbackCaptureTime, .missingSidecar, .duplicateTimestampResolved:
             return false
         }
     }
@@ -67,6 +69,14 @@ struct PreflightEngine: Sendable {
             issues.append(PreflightIssue(
                 kind: .duplicateDestination,
                 message: "批内重复目标：\(duplicates.keys.sorted().joined(separator: "、"))（检查模板是否缺少 {index}）"
+            ))
+        }
+
+        // 1.5 Duplicate Timestamp 已由 Sequence 消解（PRD F-09）——显式告知用户哪些组被自动改名
+        if !plan.sequenceResolvedAssetIDs.isEmpty {
+            issues.append(PreflightIssue(
+                kind: .duplicateTimestampResolved,
+                message: "\(plan.sequenceResolvedAssetIDs.count) 组资产拍摄时间相同，已自动追加序号（-2、-3…）保证名字唯一"
             ))
         }
 

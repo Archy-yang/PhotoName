@@ -144,4 +144,84 @@ final class RenamePlannerTests: XCTestCase {
         XCTAssertEqual(plan.operations.count, 1)
         XCTAssertEqual(plan.operations.first?.originalURL.lastPathComponent, "DSC_0042.ARW")
     }
+
+    // MARK: - Duplicate Timestamp 的 Sequence 消解（PRD F-09）
+
+    /// 连拍同秒 + 模板无 {index}：第二个同名资产自动追加 -2（第一个保持干净名）
+    func test_plan_duplicateTimestamps_secondAssetGetsSequenceSuffix() throws {
+        let first = asset(["DSC_0001.ARW"])
+        let second = asset(["DSC_0002.ARW"])
+        let plan = try planner.makePlan(
+            assets: [first, second],
+            metadata: [
+                first.id: PhotoMetadata(captureTime: sampleDate),
+                second.id: PhotoMetadata(captureTime: sampleDate),
+            ],
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{HH}{mm}{ss}")
+        )
+        XCTAssertEqual(plan.operations.map { $0.newURL.lastPathComponent }, [
+            "20260902_103122.ARW",
+            "20260902_103122-2.ARW",
+        ])
+        XCTAssertEqual(plan.sequenceResolvedAssetIDs, [second.id])
+    }
+
+    /// 第三组继续递增 -3
+    func test_plan_tripleDuplicates_incrementSequence() throws {
+        let assets = (1...3).map { asset(["DSC_000\($0).ARW"]) }
+        let plan = try planner.makePlan(
+            assets: assets,
+            metadata: Dictionary(uniqueKeysWithValues: assets.map { ($0.id, PhotoMetadata(captureTime: sampleDate)) }),
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{HH}{mm}{ss}")
+        )
+        XCTAssertEqual(plan.operations.map { $0.newURL.lastPathComponent }, [
+            "20260902_103122.ARW",
+            "20260902_103122-2.ARW",
+            "20260902_103122-3.ARW",
+        ])
+    }
+
+    /// 序号后缀整组原子：同资产的 ARW/JPG 共用同一后缀（Asset Atomicity）
+    func test_plan_sequenceSuffix_isGroupAtomic() throws {
+        let first = asset(["DSC_0001.ARW"])
+        let second = asset(["DSC_0002.ARW", "DSC_0002.JPG", "DSC_0002.XMP"])
+        let plan = try planner.makePlan(
+            assets: [first, second],
+            metadata: [
+                first.id: PhotoMetadata(captureTime: sampleDate),
+                second.id: PhotoMetadata(captureTime: sampleDate),
+            ],
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{HH}{mm}{ss}")
+        )
+        XCTAssertEqual(plan.operations.map { $0.newURL.lastPathComponent }, [
+            "20260902_103122.ARW",
+            "20260902_103122-2.ARW",
+            "20260902_103122-2.JPG",
+            "20260902_103122-2.XMP",
+        ])
+    }
+
+    /// 拍摄时间不同：不触发序号，干净输出
+    func test_plan_distinctTimestamps_noSequenceApplied() throws {
+        let first = asset(["DSC_0001.ARW"])
+        let second = asset(["DSC_0002.ARW"])
+        var nextSecond = DateComponents()
+        nextSecond.year = 2026; nextSecond.month = 9; nextSecond.day = 2
+        nextSecond.hour = 10; nextSecond.minute = 31; nextSecond.second = 23
+        let later = Calendar.current.date(from: nextSecond)!
+
+        let plan = try planner.makePlan(
+            assets: [first, second],
+            metadata: [
+                first.id: PhotoMetadata(captureTime: sampleDate),
+                second.id: PhotoMetadata(captureTime: later),
+            ],
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{HH}{mm}{ss}")
+        )
+        XCTAssertEqual(plan.operations.map { $0.newURL.lastPathComponent }, [
+            "20260902_103122.ARW",
+            "20260902_103123.ARW",
+        ])
+        XCTAssertTrue(plan.sequenceResolvedAssetIDs.isEmpty)
+    }
 }

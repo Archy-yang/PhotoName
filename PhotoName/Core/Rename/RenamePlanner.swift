@@ -12,6 +12,10 @@ struct RenamePlanner: Sendable {
     ) throws -> RenamePlan {
         let renderer = TemplateRenderer()
         var operations: [RenameOperation] = []
+        // Duplicate Timestamp 消解（PRD F-09）：模板无 {index} 且连拍同秒时，
+        // 同名资产自动追加 -2、-3…（整组原子——同资产所有资源共用后缀）
+        var usedBaseNames: Set<String> = []
+        var sequenceResolvedIDs: Set<UUID> = []
 
         for (offset, asset) in assets.enumerated() {
             guard let first = asset.resources.first else { continue }
@@ -23,7 +27,15 @@ struct RenamePlanner: Sendable {
                 originalBaseName: first.url.deletingPathExtension().lastPathComponent,
                 projectName: projectName
             )
-            let baseName = try renderer.render(template, context: context, index: startingIndex + offset)
+            var baseName = try renderer.render(template, context: context, index: startingIndex + offset)
+
+            if usedBaseNames.contains(baseName) {
+                var sequence = 2
+                while usedBaseNames.contains("\(baseName)-\(sequence)") { sequence += 1 }
+                baseName = "\(baseName)-\(sequence)"
+                sequenceResolvedIDs.insert(asset.id)
+            }
+            usedBaseNames.insert(baseName)
 
             for resource in asset.resources {
                 let ext = resource.url.pathExtension
@@ -42,6 +54,6 @@ struct RenamePlanner: Sendable {
             }
         }
 
-        return RenamePlan(operations: operations)
+        return RenamePlan(operations: operations, sequenceResolvedAssetIDs: sequenceResolvedIDs)
     }
 }
