@@ -49,11 +49,36 @@ final class RenameWorkflowModel {
     /// 无 assetID 的操作（旧格式单文件记录）的索引桶
     private static let ungroupedOperationsKey = UUID()
 
-    var templatePattern: String = RenameTemplate.builtinPresets[0].pattern {
-        didSet { scheduleLivePreview() }
+    var templatePattern: String {
+        didSet {
+            defaults.set(templatePattern, forKey: "template.pattern")
+            scheduleLivePreview()
+        }
     }
-    var projectName: String = "" {
-        didSet { scheduleLivePreview() }
+    var projectName: String {
+        didSet {
+            defaults.set(projectName, forKey: "template.project")
+            scheduleLivePreview()
+        }
+    }
+    /// 网格排序（F-05 拍摄时间是基石），偏好持久化
+    var assetSort: AssetSort {
+        didSet { defaults.set(assetSort.rawValue, forKey: "assets.sort") }
+    }
+    /// 按当前排序输出（EXIF 元数据优先于扫描期 fallback 时间）
+    var sortedAssets: [PhotoAsset] {
+        assetSort.sort(assets, metadata: assetMetadata)
+    }
+
+    private let defaults: UserDefaults
+
+    /// `defaults` 可注入（测试）；生产用 `.standard`。启动时恢复上次的模板/项目名/排序
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.templatePattern = defaults.string(forKey: "template.pattern")
+            ?? RenameTemplate.builtinPresets[0].pattern
+        self.projectName = defaults.string(forKey: "template.project") ?? ""
+        self.assetSort = (defaults.string(forKey: "assets.sort")).flatMap(AssetSort.init(rawValue:)) ?? .captureTime
     }
 
     /// 实时示例名：用第一个资产渲染模板（配合资产列表/Inspector 的完整预览）
@@ -285,7 +310,13 @@ final class RenameWorkflowModel {
         )
         activeStore = store
         transaction = RenameTransaction(journal: journal, activeStore: store)
-        engine = RenameEngine(journal: journal)
+        let newEngine = RenameEngine(journal: journal)
+        engine = newEngine
+        // 清理无法撤销的孤儿记录（文件被外部删除的），让 canUndo 反映真实可撤销量
+        Task.detached(priority: .utility) {
+            _ = try? newEngine.cleanupOrphanRecords()
+            await MainActor.run { self.refreshCanUndo() }
+        }
         refreshCanUndo()
         Task { await checkInterruptedBatch() }
     }

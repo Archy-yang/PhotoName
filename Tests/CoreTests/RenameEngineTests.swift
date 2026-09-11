@@ -83,4 +83,46 @@ final class RenameEngineTests: XCTestCase {
         try content.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
+
+    // MARK: - 撤销容错：外部丢失的文件不使整批失败
+
+    /// 批内一个文件被外部删除：撤销时跳过它，其余照常恢复，Journal 正常清空
+    func test_undoLastBatch_skipsExternallyMissingFiles() throws {
+        let a = try makeFile(named: "a.ARW", content: "a")
+        let b = try makeFile(named: "b.ARW", content: "b")
+        let newA = workDir.appending(path: "x.ARW")
+        let newB = workDir.appending(path: "y.ARW")
+        try RenameTransaction(journal: engine.journal).execute(RenamePlan(operations: [
+            RenameOperation(originalURL: a, newURL: newA),
+            RenameOperation(originalURL: b, newURL: newB),
+        ]))
+        try FileManager.default.removeItem(at: newB)  // 模拟外部删除
+
+        let restored = try engine.undoLastBatch()
+
+        XCTAssertEqual(restored, [workDir.appending(path: "a.ARW")], "只恢复存活的 a，丢失的 b 被跳过")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: workDir.appending(path: "a.ARW").path))
+        XCTAssertTrue(try engine.journal.allRecords().isEmpty, "整批记录照常清除")
+    }
+
+    // MARK: - 孤儿记录清理（原路径与新路径都消失的记录无法撤销）
+
+    func test_cleanupOrphanRecords_removesDeadEntries() throws {
+        let a = try makeFile(named: "a.ARW", content: "a")
+        _ = try engine.rename(a, to: "x.ARW")
+        // 两条死记录：两路径都不存在
+        let dead1 = RenameRecord(originalPath: "/gone/1.ARW", newPath: "/gone/2.ARW")
+        let dead2 = RenameRecord(originalPath: workDir.appending(path: "gone.ARW").path, newPath: workDir.appending(path: "gone2.ARW").path)
+        try engine.journal.append(contentsOf: [dead1, dead2])
+        XCTAssertEqual(try engine.journal.allRecords().count, 3)
+
+        let removed = try engine.cleanupOrphanRecords()
+
+        XCTAssertEqual(removed, 2)
+        XCTAssertEqual(try engine.journal.allRecords().count, 1, "活记录保留")
+    }
+
+    func test_cleanupOrphanRecords_emptyJournal_returnsZero() throws {
+        XCTAssertEqual(try engine.cleanupOrphanRecords(), 0)
+    }
 }

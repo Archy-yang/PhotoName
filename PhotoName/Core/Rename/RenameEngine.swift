@@ -28,27 +28,52 @@ struct RenameEngine: Sendable {
     }
 
     /// 撤销最近一次重命名（单条记录）。没有可撤销的记录时返回 nil。
+    /// 目标文件已被外部移动/删除的记录直接跳过（继续撤更早的），不使撤销失败。
     @discardableResult
     func undoLast() throws -> URL? {
-        guard let record = try journal.removeLast() else { return nil }
-        let current = URL(fileURLWithPath: record.newPath)
-        let restored = URL(fileURLWithPath: record.originalPath)
-        try FileManager.default.moveItem(at: current, to: restored)
-        return restored
+        while let record = try journal.removeLast() {
+            let current = URL(fileURLWithPath: record.newPath)
+            guard FileManager.default.fileExists(atPath: current.path) else { continue }
+            let restored = URL(fileURLWithPath: record.originalPath)
+            try FileManager.default.moveItem(at: current, to: restored)
+            return restored
+        }
+        return nil
     }
 
     /// 批次级撤销：整体回退最后一个事务（PRD F-12）。撤销只能按批次逆序进行，
     /// 不能跳过中间批次——跨批次撤销会把文件拖到从未存在过的状态。
+    /// 目标文件已被外部移动/删除的记录跳过并照常清除（用户自己动的文件不背锅）。
     @discardableResult
     func undoLastBatch() throws -> [URL] {
         guard let records = try journal.removeLastTransaction() else { return [] }
-        return try records.reversed().map { record in
+        var restored: [URL] = []
+        for record in records.reversed() {
+            let current = URL(fileURLWithPath: record.newPath)
+            guard FileManager.default.fileExists(atPath: current.path) else { continue }
             try FileManager.default.moveItem(
-                at: URL(fileURLWithPath: record.newPath),
+                at: current,
                 to: URL(fileURLWithPath: record.originalPath)
             )
-            return URL(fileURLWithPath: record.originalPath)
+            restored.append(URL(fileURLWithPath: record.originalPath))
         }
+        return restored
+    }
+
+    /// 清理孤儿记录：原路径与新路径都已不存在（文件被外部删除）的记录永远无法撤销，
+    /// 留着只会让 canUndo 虚高。启动/选文件夹时调用。返回清理数。
+    @discardableResult
+    func cleanupOrphanRecords() throws -> Int {
+        let records = try journal.allRecords()
+        let orphans = records.filter {
+            !FileManager.default.fileExists(atPath: $0.newPath)
+                && !FileManager.default.fileExists(atPath: $0.originalPath)
+        }
+        guard !orphans.isEmpty else { return 0 }
+        try journal.removeRecords { record in
+            orphans.contains(where: { $0.id == record.id })
+        }
+        return orphans.count
     }
 
     /// 资产级撤销：在最近一个包含该资产的事务中，把该资产组的所有文件整体回退（PRD §12 Asset Atomicity）。
@@ -83,9 +108,11 @@ struct RenameEngine: Sendable {
             assetRecords.contains(where: { $0.id == record.id })
         }
 
-        return try assetRecords.reversed().map { record in
+        return try assetRecords.reversed().compactMap { record in
+            let current = URL(fileURLWithPath: record.newPath)
+            guard FileManager.default.fileExists(atPath: current.path) else { return nil }
             try FileManager.default.moveItem(
-                at: URL(fileURLWithPath: record.newPath),
+                at: current,
                 to: URL(fileURLWithPath: record.originalPath)
             )
             return URL(fileURLWithPath: record.originalPath)

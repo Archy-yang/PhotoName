@@ -136,32 +136,62 @@ struct AssetBrowserView: View {
                 )
                 .foregroundStyle(UITheme.textDim)
             } else {
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 210), spacing: 16)],
-                        spacing: 16
-                    ) {
-                        ForEach(model.assets) { asset in
-                            AssetCardView(
-                                asset: asset,
-                                thumbnailStore: model.thumbnails,
-                                newBaseName: newBaseName(of: asset),
-                                isAlreadyNamed: isAlreadyNamed(asset),
-                                isSelected: model.selection == asset.id,
-                                onSelect: { model.selection = asset.id },
-                                onUndo: { Task { await model.undoAsset(asset) } }
-                            )
+                VStack(spacing: 0) {
+                    gridHeader
+                    ScrollView {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 210), spacing: 16)],
+                            spacing: 16
+                        ) {
+                            ForEach(model.sortedAssets) { asset in
+                                AssetCardView(
+                                    asset: asset,
+                                    thumbnailStore: model.thumbnails,
+                                    newBaseName: newBaseName(of: asset),
+                                    isAlreadyNamed: isAlreadyNamed(asset),
+                                    isSelected: model.selection == asset.id,
+                                    onSelect: { model.selection = asset.id },
+                                    onUndo: { Task { await model.undoAsset(asset) } }
+                                )
+                            }
                         }
+                        .padding(16)
+                        // 侧栏开合时禁止隐式动画逐卡动画（数百次 frame 动画 = 掉帧）；
+                        // 列宽变化直接就位，只有 NavigationSplitView 自己做侧栏动画
+                        .transaction { $0.animation = nil }
                     }
-                    .padding(16)
-                    // 侧栏开合时禁止隐式动画逐卡动画（数百次 frame 动画 = 掉帧）；
-                    // 列宽变化直接就位，只有 NavigationSplitView 自己做侧栏动画
-                    .transaction { $0.animation = nil }
                 }
                 .background(UITheme.ground)
             }
         }
         .background(UITheme.ground)
+    }
+
+    /// 网格头部：资产计数 + 排序方式（F-05 拍摄时间是排序基石）
+    private var gridHeader: some View {
+        HStack(spacing: 10) {
+            Text("\(model.assets.count) 组资产")
+                .font(.callout.weight(.medium))
+                .foregroundStyle(UITheme.textPrimary)
+            if let plan = model.plan {
+                Text("预览 \(plan.operations.count) 个文件")
+                    .font(.caption)
+                    .foregroundStyle(UITheme.textDim)
+            }
+            Spacer()
+            Picker("排序", selection: $model.assetSort) {
+                ForEach(AssetSort.allCases, id: \.self) { sort in
+                    Text(sort.displayName).tag(sort)
+                }
+            }
+            .pickerStyle(.menu)
+            .font(.caption)
+            .foregroundStyle(UITheme.textDim)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(UITheme.ground)
+        .overlay(alignment: .bottom) { Rectangle().fill(UITheme.line).frame(height: 1) }
     }
 
     private var emptyState: some View {
@@ -412,11 +442,13 @@ struct AssetBrowserView: View {
 
     private var undoButton: some View {
         Button("撤销上一批") { Task { await model.undoLastBatch() } }
+            .keyboardShortcut("z", modifiers: [.command, .shift])
             .disabled(!model.canUndo || model.isBusy)
     }
 
     private var executeButton: some View {
         Button("执行重命名") { Task { await model.executePlan() } }
+            .keyboardShortcut(.return, modifiers: .command)
             .fontWeight(.semibold)
             .foregroundStyle(.black.opacity(0.85))
             .tint(UITheme.amber)
