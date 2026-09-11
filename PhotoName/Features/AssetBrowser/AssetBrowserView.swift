@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct AssetBrowserView: View {
     @State private var model = RenameWorkflowModel()
     @State private var showImporter = false
+    @State private var showPaywall = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,6 +29,9 @@ struct AssetBrowserView: View {
         }
         .preferredColorScheme(.dark)
         .background(UITheme.ground)
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [.folder],
@@ -82,6 +86,24 @@ struct AssetBrowserView: View {
                 ))
             }
             #endif
+            Section {
+                if model.featureGate.isPro {
+                    Label("Pro 已解锁", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(UITheme.amber)
+                        .font(.callout.weight(.medium))
+                } else {
+                    Button {
+                        showPaywall = true
+                    } label: {
+                        Label("升级 Pro", systemImage: "lock.open")
+                            .foregroundStyle(UITheme.amber)
+                            .font(.callout.weight(.medium))
+                    }
+                    Text("一次买断 · 终身使用 · 无订阅")
+                        .font(.caption2)
+                        .foregroundStyle(UITheme.textFaint)
+                }
+            }
         }
         .scrollContentBackground(.hidden)
         .background(UITheme.panel)
@@ -282,13 +304,18 @@ struct AssetBrowserView: View {
                 preflightSummary(report)
             }
             if let hint = commerceHint {
-                Label(hint, systemImage: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(UITheme.amber)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
-                    .background(UITheme.amber.opacity(0.08))
+                HStack(spacing: 8) {
+                    Label(hint, systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(UITheme.amber)
+                    Button("了解 Pro") { showPaywall = true }
+                        .buttonStyle(.link)
+                        .font(.caption.weight(.medium))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(UITheme.amber.opacity(0.08))
             }
             if let sample = model.templateSample {
                 templateSampleLine(sample)

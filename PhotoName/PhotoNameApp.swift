@@ -11,6 +11,10 @@ struct PhotoNameApp: App {
                 .environment(featureGate)
         }
         .defaultSize(width: 1360, height: 840)
+
+        Settings {
+            CommerceSettingsView()
+        }
     }
 }
 
