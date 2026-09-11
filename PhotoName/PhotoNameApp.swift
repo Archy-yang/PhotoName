@@ -10,6 +10,7 @@ struct PhotoNameApp: App {
             ContentView()
                 .environment(featureGate)
         }
+        .defaultSize(width: 1360, height: 840)
     }
 }
 

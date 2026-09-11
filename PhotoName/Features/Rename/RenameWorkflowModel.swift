@@ -7,7 +7,9 @@ final class RenameWorkflowModel {
     private(set) var folderURL: URL?
     private(set) var assets: [PhotoAsset] = []
     private(set) var assetMetadata: [UUID: PhotoMetadata] = [:]
-    private(set) var plan: RenamePlan?
+    private(set) var plan: RenamePlan? {
+        didSet { rebuildOperationIndex() }
+    }
     private(set) var preflightReport: PreflightReport?
     private(set) var statusText = ""
     private(set) var canUndo = false
@@ -15,6 +17,8 @@ final class RenameWorkflowModel {
     private(set) var isBusy = false
     /// 检测到的中断批次（Crash Recovery）：非 nil 时 UI 显示恢复提示条
     private(set) var interruptedBatch: InterruptedBatch?
+    /// 资产网格缩略图缓存（内存态，扫描后失效重建）
+    let thumbnails = ThumbnailStore()
 
     /// 当前选中的资产（Inspector 展示用）
     var selection: PhotoAsset.ID?
@@ -23,10 +27,24 @@ final class RenameWorkflowModel {
         assets.first { $0.id == selection }
     }
 
-    /// 某资产在当前方案中的改名操作（Inspector 预览用）
+    /// 某资产在当前方案中的改名操作（Inspector 预览用）。
+    /// 走预建索引 O(1)——网格里每张卡每次渲染都要查，线性扫描 3000 条会拖垮重绘。
     func operations(for asset: PhotoAsset) -> [RenameOperation] {
-        plan?.operations.filter { $0.assetID == asset.id } ?? []
+        operationIndex[asset.id] ?? []
     }
+
+    private var operationIndex: [UUID: [RenameOperation]] = [:]
+
+    private func rebuildOperationIndex() {
+        var index: [UUID: [RenameOperation]] = [:]
+        for operation in plan?.operations ?? [] {
+            index[operation.assetID ?? Self.ungroupedOperationsKey, default: []].append(operation)
+        }
+        operationIndex = index
+    }
+
+    /// 无 assetID 的操作（旧格式单文件记录）的索引桶
+    private static let ungroupedOperationsKey = UUID()
 
     var templatePattern: String = RenameTemplate.builtinPresets[0].pattern {
         didSet { scheduleLivePreview() }
@@ -78,7 +96,9 @@ final class RenameWorkflowModel {
 
     /// App 启动时用持久化的 bookmark 恢复上次选择的文件夹
     func restoreLastFolder() {
-        guard folderURL == nil,
+        // 单测宿主运行 App UI 时跳过：不扫描、不预览，避免拖慢/挂起测试进程
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+              folderURL == nil,
               let data = UserDefaults.standard.data(forKey: "spikeA.folderBookmark")
         else { return }
 
@@ -239,7 +259,7 @@ final class RenameWorkflowModel {
         guard let engine else { return }
         do {
             let restored = try await Task.detached(priority: .userInitiated) {
-                try engine.undoAsset(asset.id)
+                try engine.undoAsset(matching: asset)
             }.value
             if restored.isEmpty {
                 statusText = "该资产没有可撤销的变更"
@@ -329,6 +349,7 @@ final class RenameWorkflowModel {
         assets = loaded
         assetMetadata = [:]
         metadataCache = nil
+        thumbnails.invalidateAll()
         plan = nil
         preflightReport = nil
         if let selection, !assets.contains(where: { $0.id == selection }) {

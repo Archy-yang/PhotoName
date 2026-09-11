@@ -53,14 +53,32 @@ struct RenameEngine: Sendable {
 
     /// 资产级撤销：在最近一个包含该资产的事务中，把该资产组的所有文件整体回退（PRD §12 Asset Atomicity）。
     /// 单个文件级撤销会导致组内半改状态（RAW 回了旧名、JPG 还是新名），因此不提供。
+    ///
+    /// 关联键用**路径**而非 assetID：每次扫描都会生成新的资产 UUID，按 ID 匹配在
+    /// "执行后刷新列表"和"跨会话"两个场景必然失配（右键撤销静默失效）。
+    /// 资产当前资源路径等于该批次记录的 newPath 时命中；旧格式记录（无路径可配）按 assetID 兜底。
     @discardableResult
-    func undoAsset(_ assetID: UUID) throws -> [URL] {
+    func undoAsset(matching asset: PhotoAsset) throws -> [URL] {
+        let currentPaths = Set(asset.resources.map { $0.url.standardizedFileURL.path })
+
+        func pathsHit(_ record: RenameRecord) -> Bool {
+            currentPaths.contains(URL(fileURLWithPath: record.newPath).standardizedFileURL.path)
+                || currentPaths.contains(URL(fileURLWithPath: record.originalPath).standardizedFileURL.path)
+        }
+
         let transactions = try journal.transactions()
         guard let transaction = transactions.last(where: { group in
-            group.contains { $0.assetID == assetID }
+            group.contains { pathsHit($0) }
         }) else { return [] }
 
-        let assetRecords = transaction.filter { $0.assetID == assetID }
+        // 命中事务里，产出"当前路径"的那部分记录才是该资产组（同批次内其他资产不动）
+        var assetRecords = transaction.filter { pathsHit($0) }
+        if assetRecords.isEmpty {
+            // 路径全不匹配（文件被外部改名等）：旧格式记录按 assetID 兜底
+            assetRecords = transaction.filter { $0.assetID == asset.id }
+        }
+        guard !assetRecords.isEmpty else { return [] }
+
         try journal.removeRecords { record in
             assetRecords.contains(where: { $0.id == record.id })
         }

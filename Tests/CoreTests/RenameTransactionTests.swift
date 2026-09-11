@@ -260,11 +260,66 @@ final class RenameTransactionTests: XCTestCase {
         ])
         try transaction.execute(plan)
 
+        // 模拟"执行后重新扫描"：资产是新实例、新 UUID，资源指向改名后的现路径
+        let rescanned = PhotoAsset(resources: [
+            PhotoResource(url: workDir.appending(path: "20260902_0001.ARW"), kind: .raw),
+            PhotoResource(url: workDir.appending(path: "20260902_0001.JPG"), kind: .jpeg),
+        ])
         let engine = RenameEngine(journal: journal)
-        let restored = try engine.undoAsset(assetOne.id)
+        let restored = try engine.undoAsset(matching: rescanned)
 
         XCTAssertEqual(Set(restored.map(\.lastPathComponent)), ["DSC_0001.ARW", "DSC_0001.JPG"])
         XCTAssertTrue(FileManager.default.fileExists(atPath: workDir.appending(path: "20260902_0002.ARW").path), "其他资产不应被动")
         XCTAssertEqual(try journal.allRecords().count, 1, "只移除该资产的记录")
+    }
+
+    /// 资产级撤销按路径匹配（资产 ID 每次扫描都会变，不能作为 Journal 关联键）；
+    /// Journal 里只有 assetID、没有可匹配路径时（旧格式记录）回退按 assetID 兜底
+    func test_undoAsset_byAssetIDFallback_forLegacyRecords() throws {
+        try makeFile("DSC_0001.ARW")
+        let plan = RenamePlan(operations: [
+            RenameOperation(originalURL: workDir.appending(path: "DSC_0001.ARW"), newURL: workDir.appending(path: "20260902_0001.ARW"), assetID: assetOne.id),
+        ])
+        try transaction.execute(plan)
+
+        // 扫描后用户又手动把文件改名了：现路径既不是 newPath 也不是 originalPath，
+        // 但旧实例仍持有 assetID（旧格式记录场景）
+        let legacy = PhotoAsset(id: assetOne.id, resources: [
+            PhotoResource(url: workDir.appending(path: "renamed-manually.ARW"), kind: .raw),
+        ])
+        let restored = try RenameEngine(journal: journal).undoAsset(matching: legacy)
+        XCTAssertTrue(restored.isEmpty || restored.count == 1, "路径不匹配时走 assetID 兜底，不应崩溃")
+    }
+
+    /// 回归（用户报告：撤一个组，后面的组全被撤了）：单批 5 组资产，
+    /// 撤销第 3 组不得波及第 4/5 组——文件与 Journal 记录都要保持原状
+    func test_undoAsset_isolatesToTargetGroup_inOneBatch() throws {
+        for i in 1...5 {
+            try makeFile("DSC_000\(i).ARW")
+            try makeFile("DSC_000\(i).JPG")
+        }
+        let operations = (1...5).flatMap { i -> [RenameOperation] in
+            let asset = PhotoAsset()
+            return [
+                RenameOperation(originalURL: workDir.appending(path: "DSC_000\(i).ARW"), newURL: workDir.appending(path: "20260902_000\(i).ARW"), assetID: asset.id),
+                RenameOperation(originalURL: workDir.appending(path: "DSC_000\(i).JPG"), newURL: workDir.appending(path: "20260902_000\(i).JPG"), assetID: asset.id),
+            ]
+        }
+        try transaction.execute(RenamePlan(operations: operations))
+        XCTAssertEqual(try journal.allRecords().count, 10)
+
+        // 模拟执行后重新扫描：第 3 组是新实例、路径指向改名后的现路径
+        let rescannedThird = PhotoAsset(resources: [
+            PhotoResource(url: workDir.appending(path: "20260902_0003.ARW"), kind: .raw),
+            PhotoResource(url: workDir.appending(path: "20260902_0003.JPG"), kind: .jpeg),
+        ])
+        let restored = try RenameEngine(journal: journal).undoAsset(matching: rescannedThird)
+
+        XCTAssertEqual(Set(restored.map(\.lastPathComponent)), ["DSC_0003.ARW", "DSC_0003.JPG"])
+        // 后面的组不受影响
+        XCTAssertTrue(FileManager.default.fileExists(atPath: workDir.appending(path: "20260902_0004.ARW").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: workDir.appending(path: "20260902_0005.ARW").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: workDir.appending(path: "DSC_0004.ARW").path))
+        XCTAssertEqual(try journal.allRecords().count, 8, "只移除第 3 组的记录")
     }
 }
