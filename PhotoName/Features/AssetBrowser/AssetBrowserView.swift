@@ -7,6 +7,11 @@ struct AssetBrowserView: View {
     @State private var model = RenameWorkflowModel()
     @State private var showImporter = false
     @State private var showPaywall = false
+    @FocusState private var templateFieldFocused: Bool
+    /// 内置预设选中后默认锁定；「自定义模板…」显式进入编辑态
+    @State private var isEditingCustom = false
+    @State private var showSaveTemplatePopover = false
+    @State private var newTemplateName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -185,6 +190,7 @@ struct AssetBrowserView: View {
                 }
             }
             .pickerStyle(.menu)
+            .fixedSize()
             .font(.caption)
             .foregroundStyle(UITheme.textDim)
         }
@@ -357,21 +363,24 @@ struct AssetBrowserView: View {
                     menuPresets
                     templateField.frame(maxWidth: 280)
                     insertVariableMenu
+                    saveTemplateButton
                     projectField.frame(maxWidth: 200)
                     Spacer(minLength: 8)
                     statusText
                     undoButton
                     executeButton
                 }
-                // 窄：两行（编辑一行、动作一行），收掉状态文字
+                // 窄：两行（编辑一行、动作一行），收掉状态文字。
+                // 输入框必须设宽度上限——否则被 HStack 拉满整行，比例失调
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
                         menuPresets
-                        templateField
+                        templateField.frame(maxWidth: 460)
                         insertVariableMenu
+                        saveTemplateButton
                     }
                     HStack(spacing: 10) {
-                        projectField
+                        projectField.frame(maxWidth: 320)
                         Spacer(minLength: 8)
                         undoButton
                         executeButton
@@ -384,20 +393,89 @@ struct AssetBrowserView: View {
         .background(UITheme.panel)
     }
 
-    /// 紧凑预设入口：显示当前预设名，点开选择（自定义模板时显示"预设"）
+    /// 紧凑预设入口：内置预设 + 我的模板（用户保存的自定义）+ 显式的自定义入口。
+    /// 选中内置预设时模板框锁定（防止 Free 用户误改一个字符就撞上 Pro 拦截），
+    /// 「自定义模板…」是唯一显式解锁入口
     private var menuPresets: some View {
         Menu {
             ForEach(RenameTemplate.builtinPresets, id: \.pattern) { preset in
-                Button(preset.name) { model.templatePattern = preset.pattern }
+                Button {
+                    selectBuiltin(preset.pattern)
+                } label: {
+                    if model.templatePattern == preset.pattern {
+                        Label(preset.name, systemImage: "checkmark")
+                    } else {
+                        Text(preset.name)
+                    }
+                }
+            }
+            if !model.userTemplates.presets.isEmpty {
+                Section("我的模板") {
+                    ForEach(model.userTemplates.presets) { preset in
+                        Button {
+                            model.templatePattern = preset.pattern
+                            isEditingCustom = true
+                        } label: {
+                            if model.templatePattern == preset.pattern {
+                                Label(preset.name, systemImage: "checkmark")
+                            } else {
+                                Text(preset.name)
+                            }
+                        }
+                        .contextMenu {
+                            Button("删除「\(preset.name)」", role: .destructive) {
+                                model.userTemplates.delete(preset.id)
+                            }
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("自定义模板…") {
+                isEditingCustom = true
+                templateFieldFocused = true
             }
         } label: {
-            Label(currentPresetName, systemImage: "list.bullet")
+            Label(currentPresetName, systemImage: currentPresetIcon)
         }
         .fixedSize()
     }
 
+    private func selectBuiltin(_ pattern: String) {
+        model.templatePattern = pattern
+        isEditingCustom = false
+    }
+
+    /// 当前是否为内置预设 pattern
+    private var isBuiltinSelected: Bool {
+        RenameTemplate.builtinPresets.contains { $0.pattern == model.templatePattern }
+    }
+
+    /// 非内置 pattern（用户手敲或保存的自定义模板）即自定义
+    private var isCustomTemplate: Bool { !isBuiltinSelected }
+
+    /// 内置选中且未显式进入自定义编辑：输入框与变量菜单锁定
+    private var isTemplateLocked: Bool {
+        isBuiltinSelected && !isEditingCustom
+    }
+
+    /// 自定义模板是否可保存（非内置、非空，且是 Pro 权益）
+    private var canSaveTemplate: Bool {
+        isCustomTemplate && !model.templatePattern.isEmpty && model.featureGate.isPro
+    }
+
+    private var currentPresetIcon: String {
+        if let user = model.userTemplates.presets.first(where: { $0.pattern == model.templatePattern }) {
+            return "person.text.quote"
+        }
+        return isCustomTemplate ? "slider.horizontal.3" : "list.bullet"
+    }
+
     private var currentPresetName: String {
-        RenameTemplate.builtinPresets.first { $0.pattern == model.templatePattern }?.name ?? "预设"
+        if let user = model.userTemplates.presets.first(where: { $0.pattern == model.templatePattern }) {
+            return user.name
+        }
+        return RenameTemplate.builtinPresets.first { $0.pattern == model.templatePattern }?.name ?? "自定义"
     }
 
     private var templateField: some View {
@@ -409,6 +487,14 @@ struct AssetBrowserView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 12.5).monospaced())
                 .foregroundStyle(UITheme.textPrimary)
+                .focused($templateFieldFocused)
+                .disabled(isTemplateLocked)
+            if isTemplateLocked {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(UITheme.textFaint)
+                    .help("内置模板不可编辑；点左侧菜单选「自定义模板…」开始自定义")
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
@@ -481,7 +567,47 @@ struct AssetBrowserView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("插入模板变量")
+        .disabled(isTemplateLocked)
+        .help(isTemplateLocked ? "内置模板不可编辑；选「自定义模板…」后再插入变量" : "插入模板变量")
+    }
+
+    /// 保存当前自定义模板（Pro）：命名后进入「我的模板」菜单，重复使用不必重敲
+    private var saveTemplateButton: some View {
+        Button {
+            newTemplateName = currentPresetName == "自定义" ? "" : currentPresetName
+            showSaveTemplatePopover = true
+        } label: {
+            Image(systemName: "bookmark")
+                .font(.system(size: 13))
+                .foregroundStyle(canSaveTemplate ? UITheme.amber : UITheme.textFaint)
+        }
+        .buttonStyle(.borderless)
+        .disabled(!canSaveTemplate)
+        .help(saveTemplateHelp)
+        .popover(isPresented: $showSaveTemplatePopover) {
+            HStack(spacing: 8) {
+                TextField("模板名称，如：婚礼跟拍", text: $newTemplateName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                    .onSubmit(saveTemplate)
+                Button("保存", action: saveTemplate)
+                    .disabled(newTemplateName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(12)
+        }
+    }
+
+    private var saveTemplateHelp: String {
+        if !model.featureGate.isPro { return "保存自定义模板是 Pro 功能" }
+        return canSaveTemplate ? "把当前模板保存到「我的模板」" : "内置预设无需保存；编辑出自定义模板后可保存"
+    }
+
+    private func saveTemplate() {
+        let name = newTemplateName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        model.userTemplates.save(name: name, pattern: model.templatePattern)
+        showSaveTemplatePopover = false
+        model.announce("✅ 模板「\(name)」已保存，可在预设菜单「我的模板」里找到")
     }
 
     private func insertVariableButton(_ variable: String) -> some View {
@@ -514,14 +640,8 @@ struct AssetBrowserView: View {
     }
 
     private func sampleErrorMessage(for error: TemplateError) -> String {
-        switch error {
-        case .missingCaptureTime:
-            return "该资产缺少拍摄时间，日期变量无法预览"
-        case .missingProjectName:
-            return "模板使用了 {project}，请填写项目名"
-        case .unknownVariable(let name):
-            return "未知变量 {\(name)}，请检查模板"
-        }
+        // 文案统一在 TemplateError 的 LocalizedError 里维护
+        error.localizedDescription
     }
 
     private func preflightSummary(_ report: PreflightReport) -> some View {

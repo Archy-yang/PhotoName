@@ -25,12 +25,20 @@ final class EntitlementManager {
 
     private let defaults: UserDefaults
     private static let cacheKey = "entitlement.isPro"
+    #if DEBUG
+    private static let devOverrideKey = "dev.forcePro"
+    #endif
 
     /// `defaults` 可注入（测试用独立 suite）；生产用 `.standard`
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // 冷启动：先读缓存，后续 refresh() 以 StoreKit 为准
         self.storeKitIsPro = defaults.bool(forKey: Self.cacheKey)
+        #if DEBUG
+        // devProOverride 必须跟随实例的 suite：若写死 standard，App 里勾一次「模拟 Pro」
+        // 会把共享 standard defaults 污染成 true，连带单测宿主所有 Free 断言全挂（实测踩坑）
+        self.devProOverride = defaults.bool(forKey: Self.devOverrideKey)
+        #endif
     }
 
     /// 遍历当前有效权益，匹配 Pro 产品（已退款/撤销的交易不会出现在 currentEntitlements）
@@ -59,8 +67,8 @@ final class EntitlementManager {
 
     #if DEBUG
     /// 开发模拟 Pro：无开发者账号阶段的本地验证开关（DEBUG 构建专属，上架前移除，见 C5 清单）
-    var devProOverride: Bool = UserDefaults.standard.bool(forKey: "dev.forcePro") {
-        didSet { UserDefaults.standard.set(devProOverride, forKey: "dev.forcePro") }
+    var devProOverride: Bool {
+        didSet { defaults.set(devProOverride, forKey: Self.devOverrideKey) }
     }
     #endif
 

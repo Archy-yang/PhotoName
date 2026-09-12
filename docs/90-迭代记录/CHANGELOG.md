@@ -6,6 +6,16 @@
 
 ### Added
 
+- **自定义模板完整体验**（2026-09-12）：① 预设菜单显式化——末尾「自定义模板…」入口（点击聚焦模板框），选中自定义 pattern 时菜单标签变「自定义」；② **用户模板可保存**——自定义 pattern 非空时出现 🔖 保存按钮（Pro），命名后进入菜单「我的模板」分区（同名覆盖更新，右键删除，UserDefaults JSON 持久化，`UserTemplateStore`）；③ **内置模板锁定**——选中内置预设时模板框与变量菜单锁定（🔒 图标提示），防止 Free 用户误改一个字符就撞上 Pro 拦截；「自定义模板…」是唯一显式解锁入口
+
+### Fixed
+
+- **预览错误文案甩枚举名**（2026-09-12）：`TemplateError` 未实现 LocalizedError，项目名缺失时 Inspector 直接显示 "TemplateError error 2"。补全可读中文文案（缺拍摄时间/缺项目名/未知变量），实时预览与示例名行共用一套（`sampleErrorMessage` 去重）
+- **工作流条窄版比例失调**（2026-09-12）：ViewThatFits 落到两行布局时模板/项目输入框被拉满整行；排序菜单未约束宽度被拉满头部整行。分别加宽度上限与 `fixedSize()`
+- **DEBUG 模拟 Pro 污染单测**（2026-09-12）：`devProOverride` 写死读 `UserDefaults.standard`，App 里勾一次「模拟 Pro」后单测宿主共享 standard defaults，FeatureGate 全部 Free 断言连带挂掉。改为跟随实例自己的 defaults suite（测试天然隔离）
+
+### Added
+
 - **App 图标**（2026-09-12）：SVG 矢量源码（`PhotoName/Design/AppIcon.svg`）→ rsvg-convert 多尺寸渲染 → AppIcon.appiconset（16–1024 @1x/@2x 全套）。设计：暗色圆角底 + 照片堆叠 + 绿色改名箭头，与 App 内 UITheme 同语言
 
 

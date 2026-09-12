@@ -115,4 +115,12 @@ final class TemplateRendererTests: XCTestCase {
             "{project}_{YYYY}{MM}{DD}_{camera}_{index}",
         ])
     }
+
+    // MARK: - 错误文案（UI 直接展示 localizedDescription，必须是可读中文）
+
+    func test_templateErrors_haveReadableLocalizedMessages() {
+        XCTAssertEqual(TemplateError.missingCaptureTime.errorDescription, "照片缺少拍摄时间（EXIF），无法使用含日期的模板")
+        XCTAssertEqual(TemplateError.missingProjectName.errorDescription, "模板使用了 {project}，请填写项目名")
+        XCTAssertEqual(TemplateError.unknownVariable("foo").errorDescription, "模板包含未知变量 {foo}，请检查拼写")
+    }
 }

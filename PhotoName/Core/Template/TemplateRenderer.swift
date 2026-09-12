@@ -23,6 +23,20 @@ struct TemplateContext: Sendable, Equatable {
     }
 }
 
+/// 错误文案直接进 UI（实时预览状态/示例名行），必须是可读中文而非枚举名
+extension TemplateError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .missingCaptureTime:
+            "照片缺少拍摄时间（EXIF），无法使用含日期的模板"
+        case .missingProjectName:
+            "模板使用了 {project}，请填写项目名"
+        case .unknownVariable(let token):
+            "模板包含未知变量 {\(token)}，请检查拼写"
+        }
+    }
+}
+
 enum TemplateError: Error, Equatable {
     /// 模板使用了日期变量，但该资产没有拍摄时间（应由 Preflight 呈现给用户，不能静默编造）
     case missingCaptureTime

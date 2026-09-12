@@ -12,6 +12,8 @@ final class RenameWorkflowModel {
     }
     private(set) var preflightReport: PreflightReport?
     private(set) var statusText = ""
+    /// 仅 UI 内部反馈（如「模板已保存」）；核心流程状态仍走 statusText
+    func announce(_ text: String) { statusText = text }
     private(set) var canUndo = false
     /// 重 I/O（扫描/读 EXIF/批量改名）进行中，UI 据此禁用操作
     private(set) var isBusy = false
@@ -22,6 +24,8 @@ final class RenameWorkflowModel {
     /// Free/Pro 分层（C2）：执行入口与模板编辑据此拦截
     let featureGate = FeatureGate()
     let entitlements = EntitlementManager.shared
+    /// 用户保存的自定义模板（Pro 卖点）
+    let userTemplates: UserTemplateStore
 
     /// 当前选中的资产（Inspector 展示用）
     var selection: PhotoAsset.ID?
@@ -75,6 +79,7 @@ final class RenameWorkflowModel {
     /// `defaults` 可注入（测试）；生产用 `.standard`。启动时恢复上次的模板/项目名/排序
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self.userTemplates = UserTemplateStore(defaults: defaults)
         self.templatePattern = defaults.string(forKey: "template.pattern")
             ?? RenameTemplate.builtinPresets[0].pattern
         self.projectName = defaults.string(forKey: "template.project") ?? ""
@@ -211,8 +216,9 @@ final class RenameWorkflowModel {
             } else {
                 statusText = "⛔ 预检发现阻塞问题，不能执行"
             }
-        } catch TemplateError.missingCaptureTime {
-            statusText = "❌ 部分照片缺少拍摄时间（EXIF），无法使用含日期的模板"
+        } catch let error as TemplateError {
+            // LocalizedError 文案（可读中文），不再甩 "TemplateError error 2"
+            statusText = "❌ \(error.localizedDescription)"
             plan = nil
             preflightReport = nil
         } catch {
