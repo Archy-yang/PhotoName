@@ -45,7 +45,11 @@ targets:
     platform: [macOS, iOS]
     sources:
       - path: PhotoName
-        excludes: ["**/.gitkeep"]
+        excludes: ["**/.gitkeep", "Design/**"]
+      # 设计源文件（图标 SVG 等）随仓库管理，不参与编译
+      - path: PhotoName/Design
+        type: folder
+        buildPhase: none
       - path: docs
         type: folder
         buildPhase: none

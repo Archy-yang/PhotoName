@@ -74,6 +74,7 @@
 		8F3A260521924FA3C4D100CE /* ThumbnailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76A768D36F407D7DB335DE1E /* ThumbnailProvider.swift */; };
 		900DD37614065EFDA4FBC7A5 /* sony_sample.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 547CE685720D2C1ED499CAB1 /* sony_sample.jpg */; };
 		912C53CA333ADF1E9E2FA2E1 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18660FFF5BA0632B6A31B7F4 /* PaywallView.swift */; };
+		92BC968ABEC67F2154A578D4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 230068AA7549CA6BD8DF7AFC /* Assets.xcassets */; };
 		93314B7FD785A427640A6E88 /* PhotoName.storekit in Resources */ = {isa = PBXBuildFile; fileRef = B39D0CF1A55E0460FE5AAA30 /* PhotoName.storekit */; };
 		98492F500064D6E118FEC10A /* RenameTransaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA24B61404EC033D8064617 /* RenameTransaction.swift */; };
 		993F14A955BC0A85E2778B85 /* ActiveTransaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E8D5472BFA4257DE069BED8 /* ActiveTransaction.swift */; };
@@ -117,6 +118,7 @@
 		E66FEC684F39817506DAA345 /* TemplateRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15A8A7879FBD08C4D919E0F7 /* TemplateRendererTests.swift */; };
 		E7D7395F22B08B213E5AE891 /* FeatureGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 418ED169DB98448CC2EEC562 /* FeatureGateTests.swift */; };
 		E7D953B77F9DD93610E01C4E /* ActiveTransactionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94C4BB6FBDCEBB12C2C97059 /* ActiveTransactionStoreTests.swift */; };
+		E7F55A4BBA8B0B0B8550E4F5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 230068AA7549CA6BD8DF7AFC /* Assets.xcassets */; };
 		E8D37D6AEBB984408955C5FF /* FeatureGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAA3BD451A401FCB2A589E44 /* FeatureGate.swift */; };
 		E8F5B550507B703C605DF63F /* TemplateRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE2D53708F8D806B65D72B7 /* TemplateRenderer.swift */; };
 		E993DB892652A1FC9F4B62BD /* RenameWorkflowModelPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F0690BFC5B56FB9ABAF18E /* RenameWorkflowModelPersistenceTests.swift */; };
@@ -159,6 +161,7 @@
 		19064F3C99378F017B68192E /* PhotoScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoScannerTests.swift; sourceTree = "<group>"; };
 		1B48DEAB35E186C203D66441 /* RenameTemplatePresetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameTemplatePresetTests.swift; sourceTree = "<group>"; };
 		22368F53AE0EE641A6B591E2 /* RenameTransactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameTransactionTests.swift; sourceTree = "<group>"; };
+		230068AA7549CA6BD8DF7AFC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2EE2D53708F8D806B65D72B7 /* TemplateRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateRenderer.swift; sourceTree = "<group>"; };
 		3A3939D1E285D91026C5A201 /* EntitlementManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementManager.swift; sourceTree = "<group>"; };
 		3DA24B61404EC033D8064617 /* RenameTransaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameTransaction.swift; sourceTree = "<group>"; };
@@ -170,6 +173,7 @@
 		4EEFB77A492E9FF4EFB7BAAE /* RenamePlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenamePlannerTests.swift; sourceTree = "<group>"; };
 		4F22E71059BB6BFDC68B8EA7 /* AssetGrouper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetGrouper.swift; sourceTree = "<group>"; };
 		547CE685720D2C1ED499CAB1 /* sony_sample.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = sony_sample.jpg; sourceTree = "<group>"; };
+		59E463898B3A367C134BBE09 /* Design */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Design; path = PhotoName/Design; sourceTree = SOURCE_ROOT; };
 		5B7ED01D18E8D0FFC76748FF /* RenameWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameWorkflowTests.swift; sourceTree = "<group>"; };
 		5D6F7BB3C2E065AAB11E22AF /* ThumbnailProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailProviderTests.swift; sourceTree = "<group>"; };
 		5E37D7A1D49E8DC31E478E85 /* ThumbnailStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailStore.swift; sourceTree = "<group>"; };
@@ -221,6 +225,7 @@
 		0EBEF33CC3A3C4B3C63EE5D4 /* PhotoName */ = {
 			isa = PBXGroup;
 			children = (
+				230068AA7549CA6BD8DF7AFC /* Assets.xcassets */,
 				4CBD68CC600CB5538E3C5699 /* PhotoName.entitlements */,
 				91CC098AEEE57F48AA8EEE00 /* PhotoNameApp.swift */,
 				925915C73372C6AFAB1AC236 /* Commerce */,
@@ -281,6 +286,7 @@
 		33FA99401163587D6B3A52F3 = {
 			isa = PBXGroup;
 			children = (
+				59E463898B3A367C134BBE09 /* Design */,
 				FFE5126FD4E4CE2A4BE471C1 /* docs */,
 				0EBEF33CC3A3C4B3C63EE5D4 /* PhotoName */,
 				49ECB8D6F50933BDC06EB92C /* Tests */,
@@ -701,6 +707,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				92BC968ABEC67F2154A578D4 /* Assets.xcassets in Resources */,
 				EEB5991560FB72A2F5677645 /* PhotoName.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -709,6 +716,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E7F55A4BBA8B0B0B8550E4F5 /* Assets.xcassets in Resources */,
 				93314B7FD785A427640A6E88 /* PhotoName.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
