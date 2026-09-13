@@ -433,9 +433,11 @@ struct AssetBrowserView: View {
             Divider()
             Button {
                 if model.featureGate.isPro {
-                    // 从预设切过来时清空输入框，让「已进入自定义」一目了然
-                    //（用户反馈：只解锁不改变状态太隐蔽）
-                    if isBuiltinSelected { model.templatePattern = "" }
+                    // 「自定义模板…」= 开始一个新模板：从内置预设或我的模板切过来时
+                    // 都清空输入框，让状态切换一目了然（用户反馈 ×2：太隐蔽）
+                    let matchesKnownPreset = isBuiltinSelected
+                        || model.userTemplates.presets.contains { $0.pattern == model.templatePattern }
+                    if matchesKnownPreset { model.templatePattern = "" }
                     isEditingCustom = true
                     templateFieldFocused = true
                 } else {
