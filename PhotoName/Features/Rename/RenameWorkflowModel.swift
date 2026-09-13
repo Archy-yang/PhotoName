@@ -217,8 +217,9 @@ final class RenameWorkflowModel {
                 statusText = "⛔ 预检发现阻塞问题，不能执行"
             }
         } catch let error as TemplateError {
-            // LocalizedError 文案（可读中文），不再甩 "TemplateError error 2"
-            statusText = "❌ \(error.localizedDescription)"
+            // LocalizedError 文案（可读中文），不再甩 "TemplateError error 2"；
+            // ⚠️ 而非 ❌——缺项目名/缺拍摄时间是「补个信息就能继续」的软提示
+            statusText = "⚠️ \(error.localizedDescription)"
             plan = nil
             preflightReport = nil
         } catch {

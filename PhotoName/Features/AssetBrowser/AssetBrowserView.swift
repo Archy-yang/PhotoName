@@ -489,6 +489,8 @@ struct AssetBrowserView: View {
                 .foregroundStyle(UITheme.textPrimary)
                 .focused($templateFieldFocused)
                 .disabled(isTemplateLocked)
+                // 弹性收缩，把空间让给锁图标——否则长 pattern 会把它挤出宽度圈（实测踩坑）
+                .frame(maxWidth: .infinity, alignment: .leading)
             if isTemplateLocked {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 10))
@@ -616,9 +618,10 @@ struct AssetBrowserView: View {
 
     @ViewBuilder
     private func templateSampleLine(_ sample: TemplateSamplePreview.Outcome) -> some View {
-        HStack(spacing: 6) {
-            switch sample {
-            case .rendered(let name):
+        // 失败分支不在此渲染：错误文案统一走 statusText（工作流条右侧 + Inspector），
+        // 同一条提示在底栏出现三遍太吵（实测反馈）
+        if case .rendered(let name) = sample {
+            HStack(spacing: 6) {
                 Label {
                     Text("示例：\(name)")
                         .font(.caption.monospaced())
@@ -628,20 +631,11 @@ struct AssetBrowserView: View {
                         .font(.caption2)
                 }
                 .foregroundStyle(UITheme.textDim)
-            case .failed(let error):
-                Label(sampleErrorMessage(for: error), systemImage: "exclamationmark.circle")
-                    .font(.caption)
-                    .foregroundStyle(UITheme.orange)
+                Spacer()
             }
-            Spacer()
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-    }
-
-    private func sampleErrorMessage(for error: TemplateError) -> String {
-        // 文案统一在 TemplateError 的 LocalizedError 里维护
-        error.localizedDescription
     }
 
     private func preflightSummary(_ report: PreflightReport) -> some View {
