@@ -431,9 +431,20 @@ struct AssetBrowserView: View {
                 }
             }
             Divider()
-            Button("自定义模板…") {
-                isEditingCustom = true
-                templateFieldFocused = true
+            Button {
+                if model.featureGate.isPro {
+                    isEditingCustom = true
+                    templateFieldFocused = true
+                } else {
+                    // Free 不开放自定义编辑，直接引导升级（§33：说明利害，无强制弹窗）
+                    showPaywall = true
+                }
+            } label: {
+                if model.featureGate.isPro {
+                    Text("自定义模板…")
+                } else {
+                    Label("自定义模板…（Pro）", systemImage: "lock.fill")
+                }
             }
         } label: {
             Label(currentPresetName, systemImage: currentPresetIcon)
@@ -468,12 +479,20 @@ struct AssetBrowserView: View {
         if let user = model.userTemplates.presets.first(where: { $0.pattern == model.templatePattern }) {
             return "person.text.quote"
         }
-        return isCustomTemplate ? "slider.horizontal.3" : "list.bullet"
+        return (isCustomTemplate || isEditingCustom) ? "slider.horizontal.3" : "list.bullet"
     }
 
     private var currentPresetName: String {
         if let user = model.userTemplates.presets.first(where: { $0.pattern == model.templatePattern }) {
             return user.name
+        }
+        if isCustomTemplate {
+            return "自定义"
+        }
+        // 显式进入自定义编辑后，即使 pattern 还停在预设值也立即切换显示，
+        // 否则"选了自定义却还显示旧预设名"
+        if isEditingCustom {
+            return "自定义"
         }
         return RenameTemplate.builtinPresets.first { $0.pattern == model.templatePattern }?.name ?? "自定义"
     }
