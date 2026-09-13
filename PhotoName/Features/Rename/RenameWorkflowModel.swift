@@ -88,7 +88,8 @@ final class RenameWorkflowModel {
 
     /// 实时示例名：用第一个资产渲染模板（配合资产列表/Inspector 的完整预览）
     var templateSample: TemplateSamplePreview.Outcome? {
-        TemplateSamplePreview().make(
+        guard !templatePattern.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return TemplateSamplePreview().make(
             assets: assets,
             metadata: assetMetadata,
             template: RenameTemplate(pattern: templatePattern),
@@ -164,7 +165,14 @@ final class RenameWorkflowModel {
     // MARK: - 预览与执行（重 I/O 均在后台线程，UI 保持响应）
 
     func makePreviewPlan() async {
-        guard folderURL != nil, !assets.isEmpty, !templatePattern.isEmpty else { return }
+        guard folderURL != nil, !assets.isEmpty else { return }
+        // 空 pattern（切自定义时清空/用户删光）显式提示，而不是静默保留旧预检结果
+        guard !templatePattern.trimmingCharacters(in: .whitespaces).isEmpty else {
+            plan = nil
+            preflightReport = nil
+            statusText = "⚠️ 请输入模板 pattern（如 {YYYY}{MM}{DD}_{index}），或从预设菜单选择"
+            return
+        }
         isBusy = true
         defer { isBusy = false }
         previewRunID += 1
