@@ -29,13 +29,15 @@ struct RenamePlanner: Sendable {
             )
             var baseName = try renderer.render(template, context: context, index: startingIndex + offset)
 
-            if usedBaseNames.contains(baseName) {
+            // 已用名集合按小写比较：大小写不敏感卷上 case 变体（{camera} 的 "A7"/"a7"）
+            // 也是同一个名字，必须走 -2 消解而不是等执行时落盘碰撞
+            if usedBaseNames.contains(baseName.lowercased()) {
                 var sequence = 2
-                while usedBaseNames.contains("\(baseName)-\(sequence)") { sequence += 1 }
+                while usedBaseNames.contains("\(baseName)-\(sequence)".lowercased()) { sequence += 1 }
                 baseName = "\(baseName)-\(sequence)"
                 sequenceResolvedIDs.insert(asset.id)
             }
-            usedBaseNames.insert(baseName)
+            usedBaseNames.insert(baseName.lowercased())
 
             for resource in asset.resources {
                 let ext = resource.url.pathExtension

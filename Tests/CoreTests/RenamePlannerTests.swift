@@ -224,4 +224,36 @@ final class RenamePlannerTests: XCTestCase {
         ])
         XCTAssertTrue(plan.sequenceResolvedAssetIDs.isEmpty)
     }
+
+    /// 同 stem 多 RAW（ARW+CR2 同组）：整组改名，各自保留扩展名（F-04/F-08）
+    func test_plan_multipleRawResourcesInOneAsset_allRenamedKeepingExtensions() throws {
+        let group = asset(["DSC_0001.ARW", "DSC_0001.CR2", "DSC_0001.JPG"])
+        let plan = try planner.makePlan(
+            assets: [group],
+            metadata: [group.id: PhotoMetadata(captureTime: sampleDate)],
+            template: RenameTemplate(pattern: "{YYYY}{MM}{DD}_{index}")
+        )
+
+        let newNames = plan.operations.map { $0.newURL.lastPathComponent }.sorted()
+        XCTAssertEqual(newNames, ["20260902_0001.ARW", "20260902_0001.CR2", "20260902_0001.JPG"])
+        XCTAssertEqual(plan.operations.count, 3, "三个资源全部改名")
+    }
+
+    /// macOS 卷默认大小写不敏感：仅大小写不同的渲染结果也是同名，必须走 -2 消解
+    func test_sequenceResolution_treatsCaseVariantsAsDuplicates() throws {
+        let upper = asset(["A.ARW"])
+        let lower = asset(["B.ARW"])
+        let plan = try planner.makePlan(
+            assets: [upper, lower],
+            metadata: [
+                upper.id: PhotoMetadata(captureTime: sampleDate, cameraModel: "A7"),
+                lower.id: PhotoMetadata(captureTime: sampleDate, cameraModel: "a7"),
+            ],
+            template: RenameTemplate(pattern: "{camera}")
+        )
+
+        let second = plan.operations.first { $0.originalURL.lastPathComponent == "B.ARW" }
+        XCTAssertEqual(second?.newURL.lastPathComponent, "a7-2.ARW", "case 变体应触发 -2 消解而不是落盘碰撞")
+        XCTAssertEqual(plan.sequenceResolvedAssetIDs, [lower.id])
+    }
 }

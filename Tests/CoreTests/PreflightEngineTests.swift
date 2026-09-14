@@ -204,4 +204,19 @@ final class PreflightEngineTests: XCTestCase {
 
         XCTAssertTrue(report.blockingIssues.contains { $0.kind == .invalidTargetName })
     }
+
+    /// macOS 卷默认大小写不敏感：「X.ARW」与「x.ARW」在磁盘上是同一个名字，
+    /// 批内出现即碰撞，必须阻塞（字符串精确比较会漏掉这种碰撞）
+    func test_duplicateTargets_differOnlyInCase_isBlocking() {
+        let plan = RenamePlan(operations: [
+            operation("a.ARW", "20260901_0001.ARW"),
+            operation("b.ARW", "20260901_0001.arw"),
+        ])
+
+        let report = engine.run(plan: plan)
+
+        XCTAssertTrue(report.blockingIssues.contains { $0.kind == .duplicateDestination },
+                      "仅大小写不同的批内目标应判重复阻塞")
+        XCTAssertFalse(report.canExecute)
+    }
 }

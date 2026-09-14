@@ -62,13 +62,15 @@ struct PreflightEngine: Sendable {
         var issues: [PreflightIssue] = []
         let operations = plan.operations
 
-        // 1. 批内重复目标
-        let targets = operations.map { $0.newURL.lastPathComponent }
-        let duplicates = Dictionary(grouping: targets, by: { $0 }).filter { $0.value.count > 1 }
+        // 1. 批内重复目标（按小写分组：macOS 卷默认大小写不敏感，
+        // 「X.ARW」与「x.ARW」在磁盘上是同一个名字，精确字符串比较会漏掉这种碰撞）
+        let duplicates = Dictionary(grouping: operations, by: { $0.newURL.lastPathComponent.lowercased() })
+            .filter { $0.value.count > 1 }
         if !duplicates.isEmpty {
+            let names = duplicates.values.flatMap { $0.map { $0.newURL.lastPathComponent } }.sorted()
             issues.append(PreflightIssue(
                 kind: .duplicateDestination,
-                message: "批内重复目标：\(duplicates.keys.sorted().joined(separator: "、"))（检查模板是否缺少 {index}）"
+                message: "批内重复目标：\(names.joined(separator: "、"))（检查模板是否缺少 {index}）"
             ))
         }
 

@@ -83,4 +83,17 @@ final class AssetGrouperTests: XCTestCase {
             ["AAA_0000.XMP", "DSC_0001.ARW", "IMG_0002.HEIC"]
         )
     }
+
+    /// 同 stem 的多种 RAW 格式（双机位/转格式遗留）按 F-04 归为一组，整组原子改名
+    func test_sameStem_multipleRawKinds_formOneAsset() {
+        let assets = grouper.group([
+            resource("DSC_0001.ARW"),
+            resource("DSC_0001.CR2"),
+            resource("DSC_0001.JPG"),
+        ])
+
+        XCTAssertEqual(assets.count, 1)
+        XCTAssertEqual(assets[0].resources.count, 3)
+        XCTAssertEqual(assets[0].resources.map(\.originalFilename), ["DSC_0001.ARW", "DSC_0001.CR2", "DSC_0001.JPG"])
+    }
 }
