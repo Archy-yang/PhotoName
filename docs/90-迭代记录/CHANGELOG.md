@@ -6,6 +6,8 @@
 
 ### Added
 
+- **QuickLook 大图预览**（2026-09-14）：网格中**双击资产卡**（Finder 习惯）调起系统 QuickLook，预览集合 = 该资产全部资源（RAW/JPG/HEIC 可左右翻，XMP 走文档预览），从点中的资源开始。实现：`.quickLookPreview` 修饰符在 macOS 的 `_QuickLook_SwiftUI` overlay 模块（`import QuickLookUI` 不转发，踩坑记录）；iOS 无此 overlay，import 与修饰符都挂 `#if os(macOS)`
+
 - **同 stem 多 RAW 的行为锁定与大小写碰撞防御**（2026-09-14）：`DSC_0001.ARW`+`DSC_0001.CR2` 同组整组改名各留扩展名（F-04 既有行为，补测试锁定）。修复两个真实漏洞——① Preflight 批内重复目标改为按小写分组（macOS 卷大小写不敏感，`X.ARW`/`x.ARW` 磁盘同名，精确字符串比较会漏检到执行时才炸）；② Planner 的 `-2` 消解集合同样大小写不敏感（`{camera}` 渲染出 `A7`/`a7` 的 case 变体现在会正确追加序号）
 
 - **自定义模板完整体验**（2026-09-12）：① 预设菜单显式化——末尾「自定义模板…」入口（点击聚焦模板框），选中自定义 pattern 时菜单标签变「自定义」；② **用户模板可保存**——自定义 pattern 非空时出现 🔖 保存按钮（Pro），命名后进入菜单「我的模板」分区（同名覆盖更新，右键删除，UserDefaults JSON 持久化，`UserTemplateStore`）；③ **内置模板锁定**——选中内置预设时模板框与变量菜单锁定（🔒 图标提示），防止 Free 用户误改一个字符就撞上 Pro 拦截；「自定义模板…」是唯一显式解锁入口

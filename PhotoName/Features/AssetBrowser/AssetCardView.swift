@@ -13,6 +13,8 @@ struct AssetCardView: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onUndo: () -> Void
+    /// QuickLook 大图预览（双击卡片，Finder 习惯）：参数是点中的资源，作为预览起点
+    let onPreview: (PhotoResource) -> Void
 
     /// 当前展示的资源（默认第一个非 XMP 资源；XMP 无图像，仅在仅剩 sidecar 时兜底）
     @State private var displayedResourceID: UUID?
@@ -43,6 +45,12 @@ struct AssetCardView: View {
                 .strokeBorder(borderColor, lineWidth: isSelected ? 1.5 : 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 9))
+        // 双击 = QuickLook（先注册高次数手势），单击 = 选中
+        .onTapGesture(count: 2) {
+            if let resource = displayedResource {
+                onPreview(resource)
+            }
+        }
         .onTapGesture(perform: onSelect)
         .contextMenu {
             Button("撤销此资产的最近变更（整组）", action: onUndo)

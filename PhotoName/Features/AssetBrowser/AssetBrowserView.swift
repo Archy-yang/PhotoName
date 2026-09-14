@@ -1,5 +1,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
+// quickLookPreview 修饰符在 macOS 的 _QuickLook_SwiftUI overlay 模块里，
+// QuickLookUI umbrella 不转发它（实测找不到成员）；iOS 上该 overlay 不存在
+#if os(macOS)
+@_exported import _QuickLook_SwiftUI
+#endif
 
 /// 三栏主界面（PRD §11）：Sources / Assets / Inspector + 底部工作流条。
 /// 暗色摄影工具风（界面原型定稿 2026-09-10）：缩略图网格 + 改名预览叠卡片。
@@ -12,6 +17,9 @@ struct AssetBrowserView: View {
     @State private var isEditingCustom = false
     @State private var showSaveTemplatePopover = false
     @State private var newTemplateName = ""
+    /// QuickLook 大图预览：双击卡片，预览集合 = 该资产全部资源（可左右翻）
+    @State private var quickLookURL: URL?
+    @State private var quickLookResources: [URL] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -156,7 +164,11 @@ struct AssetBrowserView: View {
                                     isAlreadyNamed: isAlreadyNamed(asset),
                                     isSelected: model.selection == asset.id,
                                     onSelect: { model.selection = asset.id },
-                                    onUndo: { Task { await model.undoAsset(asset) } }
+                                    onUndo: { Task { await model.undoAsset(asset) } },
+                                    onPreview: { resource in
+                                        quickLookResources = asset.resources.map(\.url)
+                                        quickLookURL = resource.url
+                                    }
                                 )
                             }
                         }
@@ -166,6 +178,9 @@ struct AssetBrowserView: View {
                         .transaction { $0.animation = nil }
                     }
                 }
+                #if os(macOS)
+                .quickLookPreview($quickLookURL, in: quickLookResources)
+                #endif
                 .background(UITheme.ground)
             }
         }
