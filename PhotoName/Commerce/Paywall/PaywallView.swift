@@ -35,22 +35,19 @@ struct PaywallView: View {
         .background(UITheme.ground)
         .frame(minWidth: 440, minHeight: 520)
         .overlay(alignment: .topTrailing) {
-            // 显式关闭按钮（§33 非强制弹窗：随时可走）
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(UITheme.textDim)
-                    .frame(width: 26, height: 26)
-                    .background(UITheme.card, in: Circle())
-                    .overlay(Circle().strokeBorder(UITheme.line, lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.escape, modifiers: [])
-            .focusEffectDisabled()  // 绑了 Esc 后按钮成为默认焦点，系统蓝圈很难看，关掉焦点特效
-            .padding(14)
-            .help("关闭")
+            // 显式关闭入口（§33 非强制弹窗：随时可走）。刻意不用 Button 控件——
+            // sheet 弹出时系统会把初始焦点给第一个可聚焦控件，套一圈系统蓝框（实测）；
+            // 纯图形 + 点击手势永远不会成为焦点，Esc 关 sheet 走系统默认行为
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(UITheme.textDim)
+                .frame(width: 26, height: 26)
+                .background(UITheme.card, in: Circle())
+                .overlay(Circle().strokeBorder(UITheme.line, lineWidth: 1))
+                .contentShape(Circle())
+                .onTapGesture { dismiss() }
+                .padding(14)
+                .help("关闭（Esc）")
         }
         .task { await purchases.loadProducts() }
         // 买断生效即关闭（权益全局生效，FeatureGate/界面自动解锁）
