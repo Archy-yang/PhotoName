@@ -34,6 +34,23 @@ struct PaywallView: View {
         }
         .background(UITheme.ground)
         .frame(minWidth: 440, minHeight: 520)
+        .overlay(alignment: .topTrailing) {
+            // 显式关闭按钮（§33 非强制弹窗：随时可走）
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(UITheme.textDim)
+                    .frame(width: 26, height: 26)
+                    .background(UITheme.card, in: Circle())
+                    .overlay(Circle().strokeBorder(UITheme.line, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.escape, modifiers: [])
+            .padding(14)
+            .help("关闭")
+        }
         .task { await purchases.loadProducts() }
         // 买断生效即关闭（权益全局生效，FeatureGate/界面自动解锁）
         .onChange(of: purchases.entitlementsIsPro) { _, isPro in
