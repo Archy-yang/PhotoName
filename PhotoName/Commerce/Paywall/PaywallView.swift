@@ -48,6 +48,7 @@ struct PaywallView: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.escape, modifiers: [])
+            .focusEffectDisabled()  // 绑了 Esc 后按钮成为默认焦点，系统蓝圈很难看，关掉焦点特效
             .padding(14)
             .help("关闭")
         }
